@@ -30,7 +30,8 @@ class Peer(Thread):
             msg = self.sock.recv(1024)
             if not msg:
                 continue
-            logger.info('Packet received: %s' % msg[0])
+            data = msg.decode("utf-8")
+            logger.info('Packet received: %s' % data)
             # conn.close()
         self.sock.close()
 

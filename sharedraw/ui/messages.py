@@ -24,7 +24,7 @@ class ImageMessage(Message):
         return ImageMessage(changed_pxs)
 
     def to_json(self):
-        data = list(filter(lambda x, y: {'x': x, 'y': y}, self.changed_pxs))
+        data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
         msg = {'image': {
             'clientId': 'foo',
             'coords': data,
