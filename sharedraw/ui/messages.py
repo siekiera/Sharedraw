@@ -5,6 +5,9 @@ logger = logging.getLogger(__name__)
 
 
 class Message:
+    """
+    Komunikat do wymiany danych z innymi użytkownikami
+    """
     def from_json(self, jsonstr: str):
         pass
 
@@ -13,6 +16,9 @@ class Message:
 
 
 class ImageMessage(Message):
+    """
+    Komunikat służący do przesłania danych o obrazie
+    """
     def __init__(self, changed_pxs: []):
         self.changed_pxs = changed_pxs
 

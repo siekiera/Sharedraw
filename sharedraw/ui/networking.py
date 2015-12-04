@@ -1,9 +1,7 @@
-import base64
 import logging
 from threading import Event, Thread
 from socket import *
 
-from sharedraw.concurrent.threading import TimerThread
 from sharedraw.ui.messages import Message
 
 
@@ -14,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class Peer(Thread):
+    """
+    Inna maszyna, do której jesteśmy podłączeni
+    """
+
     def __init__(self, sock: SocketType, stop_event: Event):
         super().__init__()
         self.sock = sock
@@ -21,11 +23,18 @@ class Peer(Thread):
         logger.debug("Peer created: %s, %s" % sock.getsockname())
 
     def send(self, data):
+        """
+        Wysyła dane do peera
+        :param data: dane (jako bajty)
+        :return: nic
+        """
         self.sock.send(data)
         # FIXME do zastanowienia się, co to w sumie ma być
         logger.info("Packet sent")
 
     def receive(self):
+        """ Odczytuje dane z gniazda
+        """
         while not self.stop_event.is_set():
             msg = self.sock.recv(1024)
             if not msg:
@@ -36,10 +45,16 @@ class Peer(Thread):
         self.sock.close()
 
     def run(self):
+        """
+        Pętla wątku peera
+        """
         self.receive()
 
 
 class PeerPool(Thread):
+    """
+    Pula peerów, do których jesteśmy podłączeni
+    """
     peers = {}
 
     def __init__(self, port: int, stop_event: Event):
@@ -50,6 +65,9 @@ class PeerPool(Thread):
         self.stop_event = stop_event
 
     def run(self):
+        """
+        Główna pętla wątku, otwiera gniazdo serwera i przyjmuje połączenia
+        """
         logger.info("Tworzę gniazdo...: port: %s" % self.port)
         sock = self.server_sock = socket(AF_INET, SOCK_STREAM)
         sock.bind(('localhost', self.port))
@@ -69,6 +87,12 @@ class PeerPool(Thread):
         sock.close()
 
     def connect_to(self, ip, port: int):
+        """ Nawiązuje połączenie z innym klientem
+
+        :param ip: ip (string)
+        :param port: port (int)
+        :return: nic
+        """
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((ip, port))
         peer = Peer(sock, self.stop_event)
@@ -76,6 +100,9 @@ class PeerPool(Thread):
         peer.start()
 
     def send(self, data: Message):
+        """ Wysyła dane do wszystkich podłączonych klientów
+        :param data: dane komunikatu
+        """
         jsondata = data.to_json()
         bytedata = bytes(jsondata, encoding='utf8')
         if not self.peers:
@@ -85,6 +112,10 @@ class PeerPool(Thread):
             peer.send(bytedata)
 
     def stop(self):
+        """
+        Zatrzymuje serwer i klientów
+        """
+        # TODO:: nie zawsze to działa - czasem zostają wątki lub gniazda otwarte
         self.running = False
         if self.server_sock:
             # s = socket(AF_INET, SOCK_STREAM)
@@ -93,42 +124,3 @@ class PeerPool(Thread):
             self.server_sock.close()
         for key, peer in self.peers.items():
             peer.sock.close()
-
-#
-# class SenderThread(TimerThread):
-#     def __init__(self, ui: SharedrawUI, stopped: Event, port: int):
-#         TimerThread.__init__(self, stopped, 3.0)
-#         self.ui = ui
-#         self.stopped = stopped
-#         self.port = port
-#         self.socket = socket(AF_INET, SOCK_STREAM)
-#         self.socket.connect((TCP_IP, port))
-#
-#     def execute(self):
-#         b64img = base64.b64encode(self.ui.get_png())
-#         self.socket.sendto(b64img)
-#         logger.info("Packet broadcasted.")
-#
-#
-# class ReceiverThread(Thread):
-#     def __init__(self, stopped: Event, port: int):
-#         Thread.__init__(self)
-#         self.stopped = stopped
-#         self.port = port
-#         # self.socket.setblocking(False)
-#
-#     def run(self):
-#         sock = socket(AF_INET, SOCK_STREAM)
-#         sock.bind((TCP_IP, self.port))
-#         sock.listen(1)
-#         # sock.settimeout(1)
-#         while not self.stopped.is_set():
-#             try:
-#                 conn, addr = sock.accept()
-#                 msg = conn.recv(1024)
-#                 if not msg:
-#                     continue
-#                 logger.info('Packet received: %s' % msg[0])
-#                 conn.close()
-#             except socket.timeout:
-#                 pass

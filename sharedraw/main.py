@@ -2,7 +2,6 @@ from getopt import getopt
 import logging
 from threading import Event
 import sys
-import threading
 from sharedraw.ui.networking import PeerPool
 from sharedraw.ui.ui import SharedrawUI
 
@@ -21,10 +20,6 @@ def main():
     peer_pool = PeerPool(port, stop_event)
     peer_pool.start()
     sd_ui = SharedrawUI(peer_pool)
-    # sender_thread = SenderThread(sd_ui, stop_event, 12345)
-    # sender_thread.start()
-    # recv_thread = ReceiverThread(stop_event, 12345)
-    # recv_thread.start()
     sd_ui.start()
     stop_event.set()
     peer_pool.stop()

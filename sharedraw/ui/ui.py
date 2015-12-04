@@ -10,23 +10,37 @@ WIDTH, HEIGHT = 640, 480
 
 
 class SharedrawUI():
+    """ Fasada widoku aplikacji
+    """
     def __init__(self, peer_pool: PeerPool):
         self.root = Tk()
         self.peer_pool = peer_pool
         self.ui = MainFrame(self)
 
     def start(self):
+        """ Uruchamia UI
+        """
         # self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.mainloop()
 
     def get_png(self):
+        """ Zwraca piksele jako PNG - prawdopodobnie do usunięcia
+        :return: piksele jako PNG
+        """
         return self.ui.drawer.as_png()
 
     def connect(self, ip, port):
+        """ Podłącza do innego klienta
+        :param ip: ip (str)
+        :param port: port (int)
+        :return:
+        """
         self.peer_pool.connect_to(ip, int(port))
 
 
 class MainFrame(Frame):
+    """ Główna ramka aplikacji
+    """
     def __init__(self, ui: SharedrawUI):
         Frame.__init__(self, ui.root)
         self.parent = ui.root
@@ -45,16 +59,26 @@ class MainFrame(Frame):
         connect_btn.bind("<Button-1>", self.connect)
 
     def save(self, e):
-        # png = self.drawer.as_png()
+        """ Wysyła komunikat o zmianie obrazka do innych klientów
+        :param e: zdarzenie
+        :return:
+        """
+        # TODO:: docelowo to trzeba robić automatycznie, a nie po naciśnięciu przycisku
         msg = ImageMessage(self.drawer.changed_pxs)
         self.ui.peer_pool.send(msg)
 
     def connect(self, e):
+        """ Uruchamia okno dialogowe do podłączenia się z innym klientem
+        :param e: zdarzenie
+        :return:
+        """
         d = ConnectDialog(self.ui)
         self.parent.wait_window(d.top)
 
 
 class Drawer():
+    """ Klasa zawierająca płótno oraz zapis śladu ruchów myszy
+    """
     x, y = None, None
 
     def __init__(self, parent, width, height):
@@ -83,12 +107,15 @@ class Drawer():
         self.y = None
 
     def as_png(self):
+        # TODO:: prawdopodobnie do usunięcia
         imgbytearr = io.BytesIO()
         self.img.save(imgbytearr, format='PNG')
         return imgbytearr.getvalue()
 
 
 class ConnectDialog:
+    """ Dialog otwierany do zdefiniowania ustawień połączenia
+    """
     def __init__(self, ui: SharedrawUI):
         top = self.top = Toplevel(ui.root)
         self.ui = ui
