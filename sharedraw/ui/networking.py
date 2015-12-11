@@ -78,6 +78,8 @@ class PeerPool(Thread):
         """
         logger.info("Tworzę gniazdo...: port: %s" % self.port)
         sock = self.server_sock = socket(AF_INET, SOCK_STREAM)
+        # Dzięki tej opcji gniazda nie powinny zostawać otwarte
+        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sock.bind(('localhost', self.port))
         sock.listen(1)
         while self.running:
@@ -123,12 +125,8 @@ class PeerPool(Thread):
         """
         Zatrzymuje serwer i klientów
         """
-        # TODO:: nie zawsze to działa - czasem zostają wątki lub gniazda otwarte
         self.running = False
         if self.server_sock:
-            # s = socket(AF_INET, SOCK_STREAM)
-            # s.connect(('localhost', self.port))
-            # s.close()
             self.server_sock.close()
         for key, peer in self.peers.items():
             peer.sock.close()
