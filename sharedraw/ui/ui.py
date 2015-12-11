@@ -1,6 +1,6 @@
 import io
 from tkinter import *
-from PIL import Image, ImageDraw
+# from PIL import Image, ImageDraw
 from sharedraw.ui.messages import ImageMessage
 from sharedraw.ui.networking import PeerPool
 
@@ -37,6 +37,14 @@ class SharedrawUI():
         """
         self.peer_pool.connect_to(ip, int(port))
 
+    def update(self, message):
+        """ Aktualizuje UI
+        :param message: komunikat
+        :return:
+        """
+        if type(message) is ImageMessage:
+            self.ui.drawer.draw(message.changed_pxs)
+
 
 class MainFrame(Frame):
     """ Główna ramka aplikacji
@@ -50,7 +58,7 @@ class MainFrame(Frame):
 
     def init(self):
         self.parent.title("Sharedraw [localhost:%s]" % self.ui.peer_pool.port)
-        self.drawer = Drawer(self.parent, WIDTH, HEIGHT)
+        self.drawer = Drawer(self.parent, WIDTH, HEIGHT, self.save)
         self.b = Button(self.parent, text="Zapisz")
         self.b.pack()
         self.b.bind("<Button-1>", self.save)
@@ -66,6 +74,8 @@ class MainFrame(Frame):
         # TODO:: docelowo to trzeba robić automatycznie, a nie po naciśnięciu przycisku
         msg = ImageMessage(self.drawer.changed_pxs)
         self.ui.peer_pool.send(msg)
+        # Reset listy punktów
+        self.drawer.changed_pxs = []
 
     def connect(self, e):
         """ Uruchamia okno dialogowe do podłączenia się z innym klientem
@@ -81,12 +91,13 @@ class Drawer():
     """
     x, y = None, None
 
-    def __init__(self, parent, width, height):
+    def __init__(self, parent, width, height, send):
+        self.send = send
         self.c = Canvas(parent, width=width, height=height, bg="white")
         self.c.pack()
         # TODO - to można wywalić raczej
-        self.img = Image.new("RGB", (width, height), (255, 255, 255))
-        self.img_draw = ImageDraw.Draw(self.img)
+        # self.img = Image.new("RGB", (width, height), (255, 255, 255))
+        # self.img_draw = ImageDraw.Draw(self.img)
         self.c.bind("<B1-Motion>", self.motion)
         self.c.bind("<ButtonRelease-1>", self.release)
         self.changed_pxs = []
@@ -95,22 +106,35 @@ class Drawer():
         prevx = self.x if self.x is not None else e.x
         prevy = self.y if self.y is not None else e.y
         self.c.create_line(prevx, prevy, e.x, e.y)
-        self.img_draw.line([prevx, prevy, e.x, e.y])
+        # self.img_draw.line([prevx, prevy, e.x, e.y])
         self.x = e.x
         self.y = e.y
         self.changed_pxs.append((e.x, e.y))
-        print('e (%s,%s)' % (e.x, e.y))
-        print('self (%s,%s)' % (self.x, self.y))
+        # print('e (%s,%s)' % (e.x, e.y))
+        # print('self (%s,%s)' % (self.x, self.y))
 
     def release(self, e):
         self.x = None
         self.y = None
+        self.send(e)
+
+    def draw(self, points: []):
+        """ Rysuje łamaną przechodzącą przez punkty points
+        :param points: punkty należące do łamanej w postaci [(x1, y1), (x2, y2), ...]
+        :return:
+        """
+        prevx, prevy = points[0]
+        for x, y in points[1:]:
+            self.c.create_line(prevx, prevy, x, y)
+            prevx, prevy = x, y
+        self.x, self.y = (None, None)
 
     def as_png(self):
         # TODO:: prawdopodobnie do usunięcia
-        imgbytearr = io.BytesIO()
-        self.img.save(imgbytearr, format='PNG')
-        return imgbytearr.getvalue()
+        # imgbytearr = io.BytesIO()
+        # self.img.save(imgbytearr, format='PNG')
+        # return imgbytearr.getvalue()
+        pass
 
 
 class ConnectDialog:

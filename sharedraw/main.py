@@ -1,9 +1,9 @@
 from getopt import getopt
 import logging
-from threading import Event
 import sys
-from sharedraw.ui.networking import PeerPool
-from sharedraw.ui.ui import SharedrawUI
+
+from sharedraw.cntrl import *
+
 
 __author__ = 'Michał Toporowski'
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)s %(levelname)s %(message)s')
@@ -17,13 +17,15 @@ def main():
             port = int(arg)
 
     stop_event = Event()
-    peer_pool = PeerPool(port, stop_event)
-    peer_pool.start()
-    sd_ui = SharedrawUI(peer_pool)
-    sd_ui.start()
+    cntrl = Controller(stop_event, port)
+    # peer_pool = PeerPool(port, stop_event)
+    cntrl.start()
+    cntrl.peer_pool.start()
+    # sd_ui = SharedrawUI(peer_pool)
+    cntrl.sd_ui.start()
     stop_event.set()
-    peer_pool.stop()
-    # print(threading.enumerate())
+    cntrl.peer_pool.stop()
+
 
 if __name__ == '__main__':
     sys.exit(main())

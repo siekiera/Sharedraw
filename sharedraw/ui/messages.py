@@ -8,9 +8,6 @@ class Message:
     """
     Komunikat do wymiany danych z innymi użytkownikami
     """
-    def from_json(self, jsonstr: str):
-        pass
-
     def to_json(self):
         pass
 
@@ -22,11 +19,11 @@ class ImageMessage(Message):
     def __init__(self, changed_pxs: []):
         self.changed_pxs = changed_pxs
 
-    def from_json(self, jsonstr: str):
-        msg = json.loads(jsonstr)
+    @staticmethod
+    def from_json(msg: {}):
         if not msg['coords']:
             logger.error('No coords!')
-        changed_pxs = list(filter(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['coords']))
+        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['coords']))
         return ImageMessage(changed_pxs)
 
     def to_json(self):
@@ -38,3 +35,21 @@ class ImageMessage(Message):
             'color': '0'
         }}
         return json.dumps(msg)
+
+message_type_handlers = {
+    'image': ImageMessage.from_json
+}
+
+
+def from_json(jsonstr: str):
+    data = json.loads(jsonstr)
+    if len(data) != 1:
+        logger.error("Nieprawidłowy komunikat!")
+        return
+    # Klucz pierwszego elementu - typ komunikatu
+    message_type = list(data.keys())[0]
+    h = message_type_handlers.get(message_type)
+    if not h:
+        logger.error("Nieznany typ komunikatu: %s" % message_type)
+    # Wywołanie funkcji obsługującej: f(jsonobj)
+    return h(data[message_type])

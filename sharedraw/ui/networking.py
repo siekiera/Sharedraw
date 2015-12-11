@@ -1,8 +1,9 @@
 import logging
+from queue import Queue
 from threading import Event, Thread
 from socket import *
 
-from sharedraw.ui.messages import Message
+from sharedraw.ui.messages import Message, from_json
 
 
 __author__ = 'michalek'
@@ -16,10 +17,12 @@ class Peer(Thread):
     Inna maszyna, do której jesteśmy podłączeni
     """
 
-    def __init__(self, sock: SocketType, stop_event: Event):
+    def __init__(self, sock: SocketType, stop_event: Event, queue_to_ui: Queue):
         super().__init__()
         self.sock = sock
         self.stop_event = stop_event
+        self.queue_to_ui = queue_to_ui
+        self.setDaemon(True)
         logger.debug("Peer created: %s, %s" % sock.getsockname())
 
     def send(self, data):
@@ -36,13 +39,16 @@ class Peer(Thread):
         """ Odczytuje dane z gniazda
         """
         while not self.stop_event.is_set():
-            msg = self.sock.recv(1024)
+            msg = self.sock.recv(65536)
             if not msg:
                 continue
             data = msg.decode("utf-8")
             logger.info('Packet received: %s' % data)
+            rcm = from_json(data)
+            self.queue_to_ui.put(rcm)
             # conn.close()
         self.sock.close()
+        # TODO:: trzeba jeszcze wysłać do pozostałych
 
     def run(self):
         """
@@ -57,12 +63,14 @@ class PeerPool(Thread):
     """
     peers = {}
 
-    def __init__(self, port: int, stop_event: Event):
+    def __init__(self, port: int, stop_event: Event, queue_to_ui: Queue):
         Thread.__init__(self)
         self.port = port
         self.server_sock = None
         self.running = True
         self.stop_event = stop_event
+        self.queue_to_ui = queue_to_ui
+        self.setDaemon(True)
 
     def run(self):
         """
@@ -77,7 +85,7 @@ class PeerPool(Thread):
                 sock.settimeout(1)
                 conn, addr = sock.accept()
                 sock.settimeout(None)
-                peer = Peer(conn, self.stop_event)
+                peer = Peer(conn, self.stop_event, self.queue_to_ui)
                 self.peers[addr] = peer
                 peer.start()
             except timeout:
@@ -95,7 +103,7 @@ class PeerPool(Thread):
         """
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((ip, port))
-        peer = Peer(sock, self.stop_event)
+        peer = Peer(sock, self.stop_event, self.queue_to_ui)
         self.peers[ip] = peer
         peer.start()
 
