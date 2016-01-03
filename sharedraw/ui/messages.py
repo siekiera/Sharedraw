@@ -8,14 +8,16 @@ class Message:
     """
     Komunikat do wymiany danych z innymi użytkownikami
     """
+
     def to_json(self):
         pass
 
 
-class ImageMessage(Message):
+class PaintMessage(Message):
     """
     Komunikat służący do przesłania danych o obrazie
     """
+
     def __init__(self, changed_pxs: []):
         self.changed_pxs = changed_pxs
 
@@ -24,11 +26,11 @@ class ImageMessage(Message):
         if not msg['coords']:
             logger.error('No coords!')
         changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['coords']))
-        return ImageMessage(changed_pxs)
+        return PaintMessage(changed_pxs)
 
     def to_json(self):
         data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
-        msg = {'image': {
+        msg = {'paint': {
             'clientId': 'foo',
             'coords': data,
             'startLine': 'true',
@@ -36,7 +38,55 @@ class ImageMessage(Message):
         }}
         return json.dumps(msg)
 
+
+class ImageMessage(Message):
+    """ Komunikat zawierający aktualny stan tablicy po dołączeniu się klienta
+    """
+
+    def __init__(self, client_id):
+        self.client_id = client_id
+
+    @staticmethod
+    def from_json(msg: {}):
+        # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
+        if not msg['clientId']:
+            logger.error('No clientId!')
+        return JoinMessage(msg['clientId'])
+
+    def to_json(self):
+        # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
+        msg = {'image': {
+            'clientId': self.client_id,
+            'imagePart': None,
+            'partId': 0,
+            'partsAmount': 1
+        }}
+        return json.dumps(msg)
+
+
+class JoinMessage(Message):
+    """ Komunikat potwiedzający dołączenie się klienta
+    """
+
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+
+    @staticmethod
+    def from_json(msg: {}):
+        if not msg['clientId']:
+            logger.error('No clientId!')
+        return JoinMessage(msg['clientId'])
+
+    def to_json(self):
+        msg = {'joined': {
+            'clientId': self.client_id
+        }}
+        return json.dumps(msg)
+
+
 message_type_handlers = {
+    'paint': PaintMessage.from_json,
+    'joined': JoinMessage.from_json,
     'image': ImageMessage.from_json
 }
 

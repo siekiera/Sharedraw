@@ -1,15 +1,27 @@
-import logging
 from queue import Queue
+import random
+import string
 from threading import Event, Thread
 from socket import *
+from datetime import datetime
 
-from sharedraw.ui.messages import Message, from_json
+from sharedraw.ui.messages import *
 
 
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
 
 # TODO:: przenieść
+
+
+def get_own_id():
+    datepart = datetime.now().strftime("%H%M%S%f")
+    randompart = ''.join(
+        random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(6))
+    return datepart + randompart
+
+
+own_id = get_own_id()
 
 
 class Peer(Thread):
@@ -19,11 +31,18 @@ class Peer(Thread):
 
     def __init__(self, sock: SocketType, stop_event: Event, queue_to_ui: Queue):
         super().__init__()
+        self.client_id = None
         self.sock = sock
         self.stop_event = stop_event
         self.queue_to_ui = queue_to_ui
         self.setDaemon(True)
         logger.debug("Peer created: %s, %s" % sock.getsockname())
+
+    def is_registered(self):
+        """ Zwraca, czy peer potwiedził swoje przyłączenie tj. wysłał komunikat "joined"
+        :return:
+        """
+        return self.client_id is not None
 
     def send(self, data):
         """
@@ -32,7 +51,6 @@ class Peer(Thread):
         :return: nic
         """
         self.sock.send(data)
-        # FIXME do zastanowienia się, co to w sumie ma być
         logger.info("Packet sent")
 
     def receive(self):
@@ -45,15 +63,32 @@ class Peer(Thread):
             data = msg.decode("utf-8")
             logger.info('Packet received: %s' % data)
             rcm = from_json(data)
-            self.queue_to_ui.put(rcm)
-            # conn.close()
+            if type(rcm) is JoinMessage:
+                # Rejestrujemy klienta
+                self.client_id = rcm.client_id
+                # TODO:: odsyłamy mu ImageMessage
+            elif type(rcm) is ImageMessage:
+                # Drugi klient potwiedził podłączenie i przesłał nam obrazek
+                # Rejestrujemy
+                self.client_id = rcm.client_id
+                # TODO:: aktualizujemy obrazek w UI
+            else:
+                # Ładujemy do kolejki - kontroler obsłuży
+                self.queue_to_ui.put(rcm)
+                # TODO:: trzeba jeszcze wysłać do pozostałych
         self.sock.close()
-        # TODO:: trzeba jeszcze wysłać do pozostałych
 
     def run(self):
         """
         Pętla wątku peera
         """
+        # Wysyłamy wiadomość "join"
+        msg = JoinMessage(own_id)
+        jsondata = msg.to_json()
+        bytedata = bytes(jsondata, encoding='utf8')
+        self.send(bytedata)
+
+        # Wchodzimy w tryb odbierania
         self.receive()
 
 
@@ -61,7 +96,7 @@ class PeerPool(Thread):
     """
     Pula peerów, do których jesteśmy podłączeni
     """
-    peers = {}
+    peers = []
 
     def __init__(self, port: int, stop_event: Event, queue_to_ui: Queue):
         Thread.__init__(self)
@@ -88,7 +123,7 @@ class PeerPool(Thread):
                 conn, addr = sock.accept()
                 sock.settimeout(None)
                 peer = Peer(conn, self.stop_event, self.queue_to_ui)
-                self.peers[addr] = peer
+                self.peers.append(peer)
                 peer.start()
             except timeout:
                 pass
@@ -106,20 +141,22 @@ class PeerPool(Thread):
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((ip, port))
         peer = Peer(sock, self.stop_event, self.queue_to_ui)
-        self.peers[ip] = peer
+        self.peers.append(peer)
         peer.start()
 
-    def send(self, data: Message):
-        """ Wysyła dane do wszystkich podłączonych klientów
+    def send(self, data: Message, excluded_client_id=None):
+        """ Wysyła dane do wszystkich zarejestrowanych klientów klientów
         :param data: dane komunikatu
+        :param excluded_client_id: klient, którego należy pominąć przy wysyłaniu
         """
         jsondata = data.to_json()
         bytedata = bytes(jsondata, encoding='utf8')
         if not self.peers:
             logger.debug("No peers connected!")
             return
-        for key, peer in self.peers.items():
-            peer.send(bytedata)
+        for peer in self.peers:
+            if peer.is_registered() and peer.client_id != excluded_client_id:
+                peer.send(bytedata)
 
     def stop(self):
         """
@@ -128,5 +165,5 @@ class PeerPool(Thread):
         self.running = False
         if self.server_sock:
             self.server_sock.close()
-        for key, peer in self.peers.items():
+        for peer in self.peers:
             peer.sock.close()

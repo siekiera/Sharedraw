@@ -1,7 +1,7 @@
 import io
 from tkinter import *
 # from PIL import Image, ImageDraw
-from sharedraw.ui.messages import ImageMessage
+from sharedraw.ui.messages import PaintMessage
 from sharedraw.ui.networking import PeerPool
 
 __author__ = 'michalek'
@@ -42,7 +42,7 @@ class SharedrawUI():
         :param message: komunikat
         :return:
         """
-        if type(message) is ImageMessage:
+        if type(message) is PaintMessage:
             self.ui.drawer.draw(message.changed_pxs)
 
 
@@ -72,7 +72,7 @@ class MainFrame(Frame):
         :return:
         """
         # TODO:: docelowo to trzeba robić automatycznie, a nie po naciśnięciu przycisku
-        msg = ImageMessage(self.drawer.changed_pxs)
+        msg = PaintMessage(self.drawer.changed_pxs)
         self.ui.peer_pool.send(msg)
         # Reset listy punktów
         self.drawer.changed_pxs = []
