@@ -1,8 +1,7 @@
-import io
 from tkinter import *
 # from PIL import Image, ImageDraw
-from sharedraw.ui.messages import PaintMessage
-from sharedraw.ui.networking import PeerPool
+from sharedraw.networking.messages import PaintMessage
+from sharedraw.networking.networking import PeerPool
 
 __author__ = 'michalek'
 

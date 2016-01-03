@@ -1,6 +1,7 @@
 from queue import Queue
 from threading import Thread, Event
-from sharedraw.ui.networking import PeerPool
+
+from sharedraw.networking.networking import PeerPool
 from sharedraw.ui.ui import SharedrawUI
 
 

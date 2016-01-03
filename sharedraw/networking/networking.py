@@ -1,12 +1,11 @@
-from queue import Queue
 import random
 import string
-from threading import Event, Thread
-from socket import *
 from datetime import datetime
+from queue import Queue
+from socket import *
+from threading import Event, Thread
 
-from sharedraw.ui.messages import *
-
+from sharedraw.networking.messages import *
 
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
