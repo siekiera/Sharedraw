@@ -18,10 +18,8 @@ def main():
 
     stop_event = Event()
     cntrl = Controller(stop_event, port)
-    # peer_pool = PeerPool(port, stop_event)
     cntrl.start()
     cntrl.peer_pool.start()
-    # sd_ui = SharedrawUI(peer_pool)
     cntrl.sd_ui.start()
     stop_event.set()
     cntrl.peer_pool.stop()

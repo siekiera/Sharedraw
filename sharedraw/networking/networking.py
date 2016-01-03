@@ -10,8 +10,6 @@ from sharedraw.networking.messages import *
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
 
-# TODO:: przenieść
-
 
 def get_own_id():
     datepart = datetime.now().strftime("%H%M%S%f")
@@ -83,9 +81,7 @@ class Peer(Thread):
         """
         # Wysyłamy wiadomość "join"
         msg = JoinMessage(own_id)
-        jsondata = msg.to_json()
-        bytedata = bytes(jsondata, encoding='utf8')
-        self.send(bytedata)
+        self.send(msg.to_bytes())
 
         # Wchodzimy w tryb odbierania
         self.receive()
@@ -148,8 +144,7 @@ class PeerPool(Thread):
         :param data: dane komunikatu
         :param excluded_client_id: klient, którego należy pominąć przy wysyłaniu
         """
-        jsondata = data.to_json()
-        bytedata = bytes(jsondata, encoding='utf8')
+        bytedata = data.to_bytes()
         if not self.peers:
             logger.debug("No peers connected!")
             return

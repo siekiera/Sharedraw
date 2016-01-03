@@ -12,6 +12,14 @@ class Message:
     def to_json(self):
         pass
 
+    def to_bytes(self):
+        """ Konwertuje komunikat do JSON-a, a następnie do tablicy bajtów
+        :return: tablica bajtów
+        """
+        jsondata = self.to_json()
+        bytedata = bytes(jsondata, encoding='utf8')
+        return bytedata
+
 
 class PaintMessage(Message):
     """

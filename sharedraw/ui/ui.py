@@ -8,7 +8,7 @@ __author__ = 'michalek'
 WIDTH, HEIGHT = 640, 480
 
 
-class SharedrawUI():
+class SharedrawUI:
     """ Fasada widoku aplikacji
     """
     def __init__(self, peer_pool: PeerPool):
