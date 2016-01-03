@@ -26,15 +26,16 @@ class PaintMessage(Message):
     Komunikat służący do przesłania danych o obrazie
     """
 
-    def __init__(self, changed_pxs: []):
+    def __init__(self, changed_pxs: [], color: str):
         self.changed_pxs = changed_pxs
+        self.color = color
 
     @staticmethod
     def from_json(msg: {}):
         if not msg['coords']:
             logger.error('No coords!')
         changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['coords']))
-        return PaintMessage(changed_pxs)
+        return PaintMessage(changed_pxs, 'white' if msg['color'] == '255' else 'black')
 
     def to_json(self):
         data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
@@ -42,7 +43,7 @@ class PaintMessage(Message):
             'clientId': 'foo',
             'coords': data,
             'startLine': 'true',
-            'color': '0'
+            'color': '255' if self.color == 'white' else '0'
         }}
         return json.dumps(msg)
 

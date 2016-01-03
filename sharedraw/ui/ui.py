@@ -42,7 +42,7 @@ class SharedrawUI:
         :return:
         """
         if type(message) is PaintMessage:
-            self.ui.drawer.draw(message.changed_pxs)
+            self.ui.drawer.draw(message.changed_pxs, message.color)
 
 
 class MainFrame(Frame):
@@ -71,7 +71,7 @@ class MainFrame(Frame):
         :return:
         """
         # TODO:: docelowo to trzeba robić automatycznie, a nie po naciśnięciu przycisku
-        msg = PaintMessage(self.drawer.changed_pxs)
+        msg = PaintMessage(self.drawer.changed_pxs, self.drawer.color)
         self.ui.peer_pool.send(msg)
         # Reset listy punktów
         self.drawer.changed_pxs = []
@@ -89,6 +89,7 @@ class Drawer():
     """ Klasa zawierająca płótno oraz zapis śladu ruchów myszy
     """
     x, y = None, None
+    color = "black"
 
     def __init__(self, parent, width, height, send):
         self.send = send
@@ -97,14 +98,26 @@ class Drawer():
         # TODO - to można wywalić raczej
         # self.img = Image.new("RGB", (width, height), (255, 255, 255))
         # self.img_draw = ImageDraw.Draw(self.img)
-        self.c.bind("<B1-Motion>", self.motion)
+        self.c.bind("<B1-Motion>", self.motion_left)
+        self.c.bind("<B3-Motion>", self.motion_right)
         self.c.bind("<ButtonRelease-1>", self.release)
+        self.c.bind("<ButtonRelease-3>", self.release)
         self.changed_pxs = []
+
+    def motion_left(self, e):
+        # Lewy przycisk - czarna linia
+        self.color = "black"
+        self.motion(e)
+
+    def motion_right(self, e):
+        # Prawy przycisk - biała linia
+        self.color = "white"
+        self.motion(e)
 
     def motion(self, e):
         prevx = self.x if self.x is not None else e.x
         prevy = self.y if self.y is not None else e.y
-        self.c.create_line(prevx, prevy, e.x, e.y)
+        self.c.create_line(prevx, prevy, e.x, e.y, fill=self.color)
         # self.img_draw.line([prevx, prevy, e.x, e.y])
         self.x = e.x
         self.y = e.y
@@ -117,14 +130,15 @@ class Drawer():
         self.y = None
         self.send(e)
 
-    def draw(self, points: []):
+    def draw(self, points: [], color: str):
         """ Rysuje łamaną przechodzącą przez punkty points
         :param points: punkty należące do łamanej w postaci [(x1, y1), (x2, y2), ...]
+        :param color: kolor
         :return:
         """
         prevx, prevy = points[0]
         for x, y in points[1:]:
-            self.c.create_line(prevx, prevy, x, y)
+            self.c.create_line(prevx, prevy, x, y, fill=color)
             prevx, prevy = x, y
         self.x, self.y = (None, None)
 
