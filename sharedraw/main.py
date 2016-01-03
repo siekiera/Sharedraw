@@ -1,25 +1,20 @@
-from getopt import getopt
 import logging
 import sys
 
+from sharedraw.config import config
 from sharedraw.cntrl import *
-
 
 __author__ = 'Michał Toporowski'
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
 
 def main():
-    port = 12345
-    opts, args = getopt(sys.argv[1:], "p:")
-    for opt, arg in opts:
-        if opt == "-p":
-            port = int(arg)
-
+    config.load()
     stop_event = Event()
-    cntrl = Controller(stop_event, port)
+    cntrl = Controller(stop_event, config.port)
     cntrl.start()
     cntrl.peer_pool.start()
+    cntrl.keep_alive_sender.start()
     cntrl.sd_ui.start()
     stop_event.set()
     cntrl.peer_pool.stop()

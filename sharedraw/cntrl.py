@@ -1,7 +1,7 @@
 from queue import Queue
 from threading import Thread, Event
 
-from sharedraw.networking.networking import PeerPool
+from sharedraw.networking.networking import PeerPool, KeepAliveSender
 from sharedraw.ui.ui import SharedrawUI
 
 
@@ -15,6 +15,7 @@ class Controller(Thread):
         self.queue_to_ui = Queue()
         self.peer_pool = PeerPool(port, stop_event, self.queue_to_ui)
         self.sd_ui = SharedrawUI(self.peer_pool)
+        self.keep_alive_sender = KeepAliveSender(stop_event, self.peer_pool)
 
     def run(self):
         while not self.stop_event.is_set():

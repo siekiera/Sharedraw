@@ -93,10 +93,30 @@ class JoinMessage(Message):
         return json.dumps(msg)
 
 
+class KeepAliveMessage(Message):
+    """ Komunikat potwierdzający aktywność klienta
+    """
+
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+
+    @staticmethod
+    def from_json(msg: {}):
+        if not msg['clientId']:
+            logger.error('No clientId!')
+        return KeepAliveMessage(msg['clientId'])
+
+    def to_json(self):
+        msg = {'keepAlive': {
+            'clientId': self.client_id
+        }}
+        return json.dumps(msg)
+
 message_type_handlers = {
     'paint': PaintMessage.from_json,
     'joined': JoinMessage.from_json,
-    'image': ImageMessage.from_json
+    'image': ImageMessage.from_json,
+    'keepAlive': KeepAliveMessage.from_json
 }
 
 
