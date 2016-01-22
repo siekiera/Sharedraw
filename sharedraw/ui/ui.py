@@ -1,7 +1,7 @@
 from tkinter import *
 # from PIL import Image, ImageDraw
-from sharedraw.networking.messages import PaintMessage
-from sharedraw.networking.networking import PeerPool
+from sharedraw.networking.messages import PaintMessage, ImageMessage
+from sharedraw.networking.networking import PeerPool, own_id
 
 __author__ = 'michalek'
 
@@ -36,13 +36,23 @@ class SharedrawUI:
         """
         self.peer_pool.connect_to(ip, int(port))
 
-    def update(self, message):
+    def paint(self, message: PaintMessage):
         """ Aktualizuje UI
         :param message: komunikat
         :return:
         """
-        if type(message) is PaintMessage:
-            self.ui.drawer.draw(message.changed_pxs, message.color)
+        self.ui.drawer.draw(message.changed_pxs, message.color)
+
+    def update_image(self, message: ImageMessage):
+        """ Aktualizuje UI
+        :param message: komunikat
+        :return:
+        """
+        # TODO
+        pass
+
+    def update_clients_info(self, clients: []):
+        self.ui.update_clients_info(clients)
 
 
 class MainFrame(Frame):
@@ -56,8 +66,11 @@ class MainFrame(Frame):
         # self.c = None
 
     def init(self):
-        self.parent.title("Sharedraw [localhost:%s]" % self.ui.peer_pool.port)
+        self.parent.title("Sharedraw [localhost:%s, id: %s]" % (self.ui.peer_pool.port, own_id))
         self.drawer = Drawer(self.parent, WIDTH, HEIGHT, self.save)
+        self.clients_info = StringVar()
+        Label(self.parent, textvariable=self.clients_info).pack()
+        self.update_clients_info([])
         self.b = Button(self.parent, text="Zapisz")
         self.b.pack()
         self.b.bind("<Button-1>", self.save)
@@ -83,6 +96,9 @@ class MainFrame(Frame):
         """
         d = ConnectDialog(self.ui)
         self.parent.wait_window(d.top)
+
+    def update_clients_info(self, clients: []):
+        self.clients_info.set("Podłączone klienty: %s" % str(clients))
 
 
 class Drawer():
@@ -136,6 +152,8 @@ class Drawer():
         :param color: kolor
         :return:
         """
+        if not points:
+            return
         prevx, prevy = points[0]
         for x, y in points[1:]:
             self.c.create_line(prevx, prevy, x, y, fill=color)

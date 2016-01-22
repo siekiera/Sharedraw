@@ -93,6 +93,26 @@ class JoinMessage(Message):
         return json.dumps(msg)
 
 
+class QuitMessage(Message):
+    """ Komunikat potwiedzający odłączenie się klienta
+    """
+
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+
+    @staticmethod
+    def from_json(msg: {}):
+        if not msg['clientId']:
+            logger.error('No clientId!')
+        return QuitMessage(msg['clientId'])
+
+    def to_json(self):
+        msg = {'quit': {
+            'clientId': self.client_id
+        }}
+        return json.dumps(msg)
+
+
 class KeepAliveMessage(Message):
     """ Komunikat potwierdzający aktywność klienta
     """
@@ -112,11 +132,33 @@ class KeepAliveMessage(Message):
         }}
         return json.dumps(msg)
 
+
+class CleanMessage(Message):
+    """ Komunikat zlecający wyczyszczenie tablicy
+    """
+
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+
+    @staticmethod
+    def from_json(msg: {}):
+        if not msg['clientId']:
+            logger.error('No clientId!')
+        return CleanMessage(msg['clientId'])
+
+    def to_json(self):
+        msg = {'clean': {
+            'clientId': self.client_id
+        }}
+        return json.dumps(msg)
+
 message_type_handlers = {
     'paint': PaintMessage.from_json,
     'joined': JoinMessage.from_json,
     'image': ImageMessage.from_json,
-    'keepAlive': KeepAliveMessage.from_json
+    'keepAlive': KeepAliveMessage.from_json,
+    'quit': QuitMessage.from_json,
+    'clean': CleanMessage.from_json
 }
 
 
@@ -132,3 +174,12 @@ def from_json(jsonstr: str):
         logger.error("Nieznany typ komunikatu: %s" % message_type)
     # Wywołanie funkcji obsługującej: f(jsonobj)
     return h(data[message_type])
+
+
+class SignedMessage:
+    """ Podpisany komunikat (z autorem)
+    """
+
+    def __init__(self, client_id: str, message: Message):
+        self.client_id = client_id
+        self.message = message

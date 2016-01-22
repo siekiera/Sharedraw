@@ -39,11 +39,17 @@ class Peer(Thread):
         self.last_alive = datetime.now()
         logger.debug("Peer created: %s, %s" % sock.getsockname())
 
+    def is_active(self):
+        """ Zwraca klient jest aktywny tj. może się komunikować
+        :return: wartość logiczna
+        """
+        return self.enabled and self.is_registered()
+
     def is_registered(self):
         """ Zwraca, czy peer potwiedził swoje przyłączenie tj. wysłał komunikat "joined"
-        :return:
+        :return: wartość logiczna
         """
-        return self.enabled and self.client_id is not None
+        return self.client_id is not None
 
     def send(self, data):
         """
@@ -65,21 +71,30 @@ class Peer(Thread):
             logger.info('Packet received: %s' % data)
             rcm = from_json(data)
             if type(rcm) is JoinMessage:
-                # Rejestrujemy klienta
-                self.client_id = rcm.client_id
-                # TODO:: odsyłamy mu ImageMessage
+                if not self.is_registered():
+                    # Nowy klient podłączył się do nas i wysłał join
+                    # Rejestrujemy klienta
+                    self.client_id = rcm.client_id
+                    # TODO:: odsyłamy mu ImageMessage
+                # else: inny klient rozpropagował nam join
             elif type(rcm) is ImageMessage:
                 # Drugi klient potwiedził podłączenie i przesłał nam obrazek
                 # Rejestrujemy
                 self.client_id = rcm.client_id
-                # TODO:: aktualizujemy obrazek w UI
+                # Aktualizujemy obrazek w UI - w ramach kontrolera
             elif type(rcm) is KeepAliveMessage:
                 # KeepAlive - aktualizujemy datę
                 self.last_alive = datetime.now()
-            else:
-                # Ładujemy do kolejki - kontroler obsłuży
-                self.queue_to_ui.put(rcm)
-                # TODO:: trzeba jeszcze wysłać do pozostałych
+                # Nieprzesyłany dalej
+                continue
+            elif type(rcm) is QuitMessage:
+                if rcm.client_id == self.client_id:
+                    # Sam zdecydował się odejść - odłączamy
+                    self.enabled = False
+                # W kontrolerze klient usunięty
+            # Ładujemy do kolejki - kontroler obsłuży
+            self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+            # Wysłanie do pozostałych klientów w kontrolerze
         self.sock.close()
 
     def run(self):
@@ -156,7 +171,7 @@ class PeerPool(Thread):
             return
         for peer in self.peers:
             bytedata = data.to_bytes()
-            if peer.is_registered() and peer.client_id != excluded_client_id:
+            if peer.is_active() and peer.client_id != excluded_client_id:
                 try:
                     peer.send(bytedata)
                 except ConnectionError:
@@ -179,11 +194,16 @@ class PeerPool(Thread):
         """
         peer.enabled = False
         self.peers.remove(peer)
+        # Wysyłamy do kontrolera info o usunięciu - zostanie rozpropagowane
+        self.queue_to_ui.put(SignedMessage(own_id, QuitMessage(str(peer.client_id))))
 
     def stop(self):
         """
         Zatrzymuje serwer i klientów
         """
+        # Wysyłamy quit do wszystkich
+        self.send(QuitMessage(own_id))
+        # Zamykamy wszystko
         self.running = False
         if self.server_sock:
             self.server_sock.close()
