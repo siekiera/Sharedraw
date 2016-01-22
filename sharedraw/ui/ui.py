@@ -1,5 +1,6 @@
+import io
 from tkinter import *
-# from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw
 from sharedraw.networking.messages import PaintMessage, ImageMessage
 from sharedraw.networking.networking import PeerPool, own_id
 
@@ -23,7 +24,7 @@ class SharedrawUI:
         self.root.mainloop()
 
     def get_png(self):
-        """ Zwraca piksele jako PNG - prawdopodobnie do usunięcia
+        """ Zwraca piksele jako PNG
         :return: piksele jako PNG
         """
         return self.ui.drawer.as_png()
@@ -48,8 +49,7 @@ class SharedrawUI:
         :param message: komunikat
         :return:
         """
-        # TODO
-        pass
+        self.ui.drawer.update_with_png(message.rawdata)
 
     def update_clients_info(self, clients: []):
         self.ui.update_clients_info(clients)
@@ -71,9 +71,9 @@ class MainFrame(Frame):
         self.clients_info = StringVar()
         Label(self.parent, textvariable=self.clients_info).pack()
         self.update_clients_info([])
-        self.b = Button(self.parent, text="Zapisz")
-        self.b.pack()
-        self.b.bind("<Button-1>", self.save)
+        b = Button(self.parent, text="Zapisz")
+        b.pack()
+        b.bind("<Button-1>", self.save)
         connect_btn = Button(self.parent, text="Podłącz")
         connect_btn.pack()
         connect_btn.bind("<Button-1>", self.connect)
@@ -101,7 +101,7 @@ class MainFrame(Frame):
         self.clients_info.set("Podłączone klienty: %s" % str(clients))
 
 
-class Drawer():
+class Drawer:
     """ Klasa zawierająca płótno oraz zapis śladu ruchów myszy
     """
     x, y = None, None
@@ -111,9 +111,8 @@ class Drawer():
         self.send = send
         self.c = Canvas(parent, width=width, height=height, bg="white")
         self.c.pack()
-        # TODO - to można wywalić raczej
-        # self.img = Image.new("RGB", (width, height), (255, 255, 255))
-        # self.img_draw = ImageDraw.Draw(self.img)
+        self.img = Image.new("RGB", (width, height), (255, 255, 255))
+        self.img_draw = ImageDraw.Draw(self.img)
         self.c.bind("<B1-Motion>", self.motion_left)
         self.c.bind("<B3-Motion>", self.motion_right)
         self.c.bind("<ButtonRelease-1>", self.release)
@@ -134,7 +133,7 @@ class Drawer():
         prevx = self.x if self.x is not None else e.x
         prevy = self.y if self.y is not None else e.y
         self.c.create_line(prevx, prevy, e.x, e.y, fill=self.color)
-        # self.img_draw.line([prevx, prevy, e.x, e.y])
+        self.img_draw.line([prevx, prevy, e.x, e.y], fill=self.color)
         self.x = e.x
         self.y = e.y
         self.changed_pxs.append((e.x, e.y))
@@ -161,11 +160,17 @@ class Drawer():
         self.x, self.y = (None, None)
 
     def as_png(self):
-        # TODO:: prawdopodobnie do usunięcia
-        # imgbytearr = io.BytesIO()
-        # self.img.save(imgbytearr, format='PNG')
-        # return imgbytearr.getvalue()
-        pass
+        imgbytearr = io.BytesIO()
+        self.img.save(imgbytearr, format='PNG')
+        return imgbytearr.getvalue()
+
+    def update_with_png(self, raw_data: bytes):
+        stream = io.BytesIO(raw_data)
+        # self.img.frombytes(raw_data, decoder_name='PNG')
+        self.img = Image.open(stream)
+        self.img_draw = ImageDraw.Draw(self.img)
+        pi = PhotoImage(self.img_draw)
+        self.c.create_image(0, 0, image=pi)
 
 
 class ConnectDialog:

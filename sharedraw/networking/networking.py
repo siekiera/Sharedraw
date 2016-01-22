@@ -75,8 +75,9 @@ class Peer(Thread):
                     # Nowy klient podłączył się do nas i wysłał join
                     # Rejestrujemy klienta
                     self.client_id = rcm.client_id
-                    # TODO:: odsyłamy mu ImageMessage
-                # else: inny klient rozpropagował nam join
+                    # odsyłamy mu ImageMessage - w kontrolerze
+                    rcm.send_back_img = True
+                    # else: inny klient rozpropagował nam join
             elif type(rcm) is ImageMessage:
                 # Drugi klient potwiedził podłączenie i przesłał nam obrazek
                 # Rejestrujemy
@@ -91,7 +92,7 @@ class Peer(Thread):
                 if rcm.client_id == self.client_id:
                     # Sam zdecydował się odejść - odłączamy
                     self.enabled = False
-                # W kontrolerze klient usunięty
+                    # W kontrolerze klient usunięty
             # Ładujemy do kolejki - kontroler obsłuży
             self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
             # Wysłanie do pozostałych klientów w kontrolerze
@@ -162,7 +163,7 @@ class PeerPool(Thread):
         peer.start()
 
     def send(self, data: Message, excluded_client_id=None):
-        """ Wysyła dane do wszystkich zarejestrowanych klientów klientów
+        """ Wysyła dane do wszystkich zarejestrowanych klientów
         :param data: dane komunikatu
         :param excluded_client_id: klient, którego należy pominąć przy wysyłaniu
         """
@@ -172,11 +173,33 @@ class PeerPool(Thread):
         for peer in self.peers:
             bytedata = data.to_bytes()
             if peer.is_active() and peer.client_id != excluded_client_id:
-                try:
-                    peer.send(bytedata)
-                except ConnectionError:
-                    logger.error("Error during sending to peer: %s. DISCONNECTING" % peer.client_id)
-                    self.__remove_peer(peer)
+                self.__send_to_peer(peer, bytedata)
+
+    def send_to_client(self, msg: Message, client_id: str):
+        """ Wysyła komunikat do klienta o podanym identyfikatorze
+        :param msg: dane komunikat
+        :param client_id: identyfikator klienta
+        """
+        for peer in self.peers:
+            if peer.client_id == client_id:
+                if peer.is_active():
+                    self.__send_to_peer(peer, msg.to_bytes())
+                else:
+                    logger.warn("Peer %s not active!" % client_id)
+                return
+        logger.warn("Client with id: %s not found" % client_id)
+
+    def __send_to_peer(self, peer: Peer, bytedata: bytes):
+        """ Wysyła dane do danego klienta
+        W przypadku błędu komunikacji klient jest usuwany.
+        :param peer: klient
+        :param bytedata: dane
+        """
+        try:
+            peer.send(bytedata)
+        except ConnectionError:
+            logger.error("Error during sending to peer: %s. DISCONNECTING" % peer.client_id)
+            self.__remove_peer(peer)
 
     def check_alive(self):
         """ Sprawdza, czy klienci są żywi i wyłącza ich, jeśli nie
