@@ -2,7 +2,7 @@ import io
 from tkinter import *
 from PIL import Image, ImageDraw, ImageTk
 from sharedraw.config import own_id, config
-from sharedraw.networking.messages import PaintMessage, ImageMessage
+from sharedraw.networking.messages import *
 from sharedraw.networking.networking import PeerPool, own_id
 
 __author__ = 'michalek'
@@ -198,9 +198,10 @@ class Drawer:
     def update_with_png(self, raw_data: bytes):
         stream = io.BytesIO(raw_data)
         # self.img.frombytes(raw_data, decoder_name='PNG')
-        self.img = Image.open(stream)
-        self.img_draw = ImageDraw.Draw(self.img)
-        pi = ImageTk.PhotoImage(image=self.img, size=(WIDTH, HEIGHT))
+        png = Image.open(stream).convert('RGB')
+        # self.img_draw = ImageDraw.Draw(self.img)
+        self.img.paste(png)
+        pi = ImageTk.PhotoImage(image=png, size=(WIDTH, HEIGHT))
         self.c.create_image(WIDTH/2, HEIGHT/2, image=pi)
 
 

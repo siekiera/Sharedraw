@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import sys
@@ -67,18 +68,16 @@ class ImageMessage(Message):
     def from_json(msg: {}):
         if not msg['clientId']:
             logger.error('No clientId!')
-        if not msg['imagePart']:
-            logger.error('No imagePart!')
-        return ImageMessage(msg['clientId'], base64.b64decode(msg['imagePart']))
+        if not msg['image']:
+            logger.error('No image!')
+        return ImageMessage(msg['clientId'], base64.b64decode(msg['image']))
 
     def to_json(self):
         # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
         msg = {
             'type': 'image',
             'clientId': self.client_id,
-            'imagePart': str(base64.b64encode(self.rawdata), encoding="utf8"),
-            'partId': 0,
-            'partsAmount': 1
+            'image': str(base64.b64encode(self.rawdata), encoding="utf8")
         }
         return json.dumps(msg)
 

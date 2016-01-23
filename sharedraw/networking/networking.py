@@ -3,23 +3,13 @@ from queue import Queue
 from socket import *
 from threading import Event, Thread
 
-from sharedraw.config import config, own_id
-
+from sharedraw.config import config
 from sharedraw.concurrent.threading import TimerThread
 from sharedraw.networking.messages import *
 
+
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
-
-
-def get_own_id():
-    datepart = datetime.now().strftime("%H%M%S%f")
-    randompart = ''.join(
-            random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(6))
-    return datepart + randompart
-
-
-own_id = get_own_id()
 
 
 class Peer(Thread):
@@ -83,32 +73,29 @@ class Peer(Thread):
                         # Nowy klient podłączył się do nas i wysłał join
                         # Rejestrujemy klienta
                         self.client_id = rcm.client_id
-                        # TODO:: odsyłamy mu ImageMessage
-                        # else: inny klient rozpropagował nam join
+                        # W kontrolerze odsyłamy mu ImageMessage
+                        rcm.send_back_img = True
                 elif type(rcm) is ImageMessage:
                     # Drugi klient potwiedził podłączenie i przesłał nam obrazek
                     # Rejestrujemy
                     self.client_id = rcm.client_id
-                    # TODO:: odsyłamy mu ImageMessage
-                # else: inny klient rozpropagował nam join
-            elif type(rcm) is ImageMessage:
-                # Drugi klient potwiedził podłączenie i przesłał nam obrazek
-                # Rejestrujemy
-                self.client_id = rcm.client_id
-                # Aktualizujemy obrazek w UI - w ramach kontrolera
-            elif type(rcm) is KeepAliveMessage:
-                # KeepAlive - aktualizujemy datę
-                self.last_alive = datetime.now()
-                # Nieprzesyłany dalej
-                continue
-            elif type(rcm) is QuitMessage:
-                if rcm.client_id == self.client_id:
-                    # Sam zdecydował się odejść - odłączamy
-                    self.enabled = False
-                # W kontrolerze klient usunięty
-            # Ładujemy do kolejki - kontroler obsłuży
-            self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
-            # Wysłanie do pozostałych klientów w kontrolerze
+                    # Aktualizujemy obrazek w UI - w ramach kontrolera
+                elif type(rcm) is KeepAliveMessage:
+                    # KeepAlive - aktualizujemy datę
+                    self.last_alive = datetime.now()
+                    # Nieprzesyłany dalej
+                    continue
+                elif type(rcm) is QuitMessage:
+                    if rcm.client_id == self.client_id:
+                        # Sam zdecydował się odejść - odłączamy
+                        self.enabled = False
+                        # W kontrolerze klient usunięty
+                # Ładujemy do kolejki - kontroler obsłuży
+                self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+                # Wysłanie do pozostałych klientów w kontrolerze
+            except ConnectionError:
+                logger.warn("Connection error: %s" % str(sys.exc_info()))
+                break
         self.sock.close()
 
     def run(self):
@@ -213,7 +200,7 @@ class PeerPool(Thread):
         """
         try:
             peer.send(bytedata)
-        except ConnectionError:
+        except OSError:
             logger.error("Error during sending to peer: %s. DISCONNECTING" % peer.client_id)
             self.__remove_peer(peer)
 
@@ -268,6 +255,7 @@ class KeepAliveSender(TimerThread):
 class MessageBuilder():
     """ Klasa do budowania komunikatów - niektóre klienty wysyłają je w częściach, zatem trzeba poskładać do całości
     """
+
     def __init__(self):
         self.msg = bytes()
         self.left_par_count = 0

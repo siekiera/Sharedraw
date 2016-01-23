@@ -32,7 +32,7 @@ class Controller(Thread):
                 ImageMessage: self._handle_image_msg,
                 # Dołączenie klienta
                 JoinMessage: self._handle_join_msg,
-                QuitMessage: lambda m: self._remove_client(m.client_id)
+                QuitMessage: lambda m: self._remove_client(m.client_id),
                 CleanMessage: lambda m: self.sd_ui.clean()
             }.get(type(sm.message))
 
