@@ -1,6 +1,6 @@
 import io
 from tkinter import *
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 from sharedraw.networking.messages import PaintMessage, ImageMessage
 from sharedraw.networking.networking import PeerPool, own_id
 
@@ -156,6 +156,7 @@ class Drawer:
         prevx, prevy = points[0]
         for x, y in points[1:]:
             self.c.create_line(prevx, prevy, x, y, fill=color)
+            self.img_draw.line([prevx, prevy, x, y], fill=color)
             prevx, prevy = x, y
         self.x, self.y = (None, None)
 
@@ -169,8 +170,8 @@ class Drawer:
         # self.img.frombytes(raw_data, decoder_name='PNG')
         self.img = Image.open(stream)
         self.img_draw = ImageDraw.Draw(self.img)
-        pi = PhotoImage(self.img_draw)
-        self.c.create_image(0, 0, image=pi)
+        pi = ImageTk.PhotoImage(image=self.img, size=(WIDTH, HEIGHT))
+        self.c.create_image(WIDTH/2, HEIGHT/2, image=pi)
 
 
 class ConnectDialog:

@@ -35,6 +35,7 @@ class Peer(Thread):
         self.stop_event = stop_event
         self.queue_to_ui = queue_to_ui
         self.enabled = True
+        self.is_incoming = False
         self.setDaemon(True)
         self.last_alive = datetime.now()
         logger.debug("Peer created: %s, %s" % sock.getsockname())
@@ -102,9 +103,10 @@ class Peer(Thread):
         """
         Pętla wątku peera
         """
-        # Wysyłamy wiadomość "join"
-        msg = JoinMessage(own_id)
-        self.send(msg.to_bytes())
+        if not self.is_incoming:
+            # Wysyłamy wiadomość "join"
+            msg = JoinMessage(own_id)
+            self.send(msg.to_bytes())
 
         # Wchodzimy w tryb odbierania
         self.receive()
@@ -142,6 +144,7 @@ class PeerPool(Thread):
                 sock.settimeout(None)
                 peer = Peer(conn, self.stop_event, self.queue_to_ui)
                 self.peers.append(peer)
+                peer.is_incoming = True
                 peer.start()
             except timeout:
                 pass
