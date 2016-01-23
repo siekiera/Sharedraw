@@ -31,8 +31,8 @@ class Controller(Thread):
                 PaintMessage: self.sd_ui.paint,
                 ImageMessage: self._handle_image_msg,
                 # Dołączenie klienta
-                JoinMessage: lambda m: self._add_client(m.client_id),
-                QuitMessage: lambda m: self._remove_client(m.client_id),
+                JoinMessage: self._handle_join_msg,
+                QuitMessage: lambda m: self._remove_client(m.client_id)
                 CleanMessage: lambda m: self.sd_ui.clean()
             }.get(type(sm.message))
 
@@ -45,6 +45,13 @@ class Controller(Thread):
         self._add_client(msg.client_id)
         self.sd_ui.update_image(msg)
 
+    def _handle_join_msg(self, msg: JoinMessage):
+        self._add_client(msg.client_id)
+        if msg.send_back_img:
+            # Odsyłamy ImageMessage, jeśli to klient, który podłączył się do nas
+            img_msg = ImageMessage(own_id, self.sd_ui.get_png())
+            self.peer_pool.send_to_client(img_msg, msg.client_id)
+
     def _add_client(self, client_id: str):
         if client_id not in self.clients:
             self.clients.append(client_id)
@@ -56,4 +63,3 @@ class Controller(Thread):
         except ValueError:
             logger.info("Value cannot be removed! %s" % client_id)
         self.sd_ui.update_clients_info(self.clients)
-

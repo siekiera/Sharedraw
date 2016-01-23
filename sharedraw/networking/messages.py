@@ -59,22 +59,24 @@ class ImageMessage(Message):
     """ Komunikat zawierający aktualny stan tablicy po dołączeniu się klienta
     """
 
-    def __init__(self, client_id):
+    def __init__(self, client_id: str, rawdata: bytes):
         self.client_id = client_id
+        self.rawdata = rawdata
 
     @staticmethod
     def from_json(msg: {}):
-        # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
         if not msg['clientId']:
             logger.error('No clientId!')
-        return ImageMessage(msg['clientId'])
+        if not msg['imagePart']:
+            logger.error('No imagePart!')
+        return ImageMessage(msg['clientId'], base64.b64decode(msg['imagePart']))
 
     def to_json(self):
         # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
         msg = {
             'type': 'image',
             'clientId': self.client_id,
-            'image': None,
+            'imagePart': str(base64.b64encode(self.rawdata), encoding="utf8"),
             'partId': 0,
             'partsAmount': 1
         }
@@ -87,6 +89,8 @@ class JoinMessage(Message):
 
     def __init__(self, client_id: str):
         self.client_id = client_id
+        # Wewnętrzny przełącznik - czy klientowi należy odesłać ImageMessage
+        self.send_back_img = False
 
     @staticmethod
     def from_json(msg: {}):
@@ -163,7 +167,6 @@ class CleanMessage(Message):
             'clientId': self.client_id
         }
         return json.dumps(msg)
-
 
 message_type_handlers = {
     'paint': PaintMessage.from_json,

@@ -8,9 +8,18 @@ from sharedraw.config import config, own_id
 from sharedraw.concurrent.threading import TimerThread
 from sharedraw.networking.messages import *
 
-
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
+
+
+def get_own_id():
+    datepart = datetime.now().strftime("%H%M%S%f")
+    randompart = ''.join(
+            random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(6))
+    return datepart + randompart
+
+
+own_id = get_own_id()
 
 
 class Peer(Thread):
@@ -25,6 +34,7 @@ class Peer(Thread):
         self.stop_event = stop_event
         self.queue_to_ui = queue_to_ui
         self.enabled = True
+        self.is_incoming = False
         self.setDaemon(True)
         self.last_alive = datetime.now()
         logger.debug("Peer created: %s, %s" % sock.getpeername())
@@ -79,33 +89,36 @@ class Peer(Thread):
                     # Drugi klient potwiedził podłączenie i przesłał nam obrazek
                     # Rejestrujemy
                     self.client_id = rcm.client_id
-                    # Aktualizujemy obrazek w UI - w ramach kontrolera
-                elif type(rcm) is KeepAliveMessage:
-                    # KeepAlive - aktualizujemy datę
-                    self.last_alive = datetime.now()
-                    logger.debug('Last alive time of client: %s updated: %s' % (self.client_id, self.last_alive))
-                    # Nieprzesyłany dalej
-                    continue
-                elif type(rcm) is QuitMessage:
-                    if rcm.client_id == self.client_id:
-                        # Sam zdecydował się odejść - odłączamy
-                        self.enabled = False
-                        # W kontrolerze klient usunięty
-                # Ładujemy do kolejki - kontroler obsłuży
-                self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
-                # Wysłanie do pozostałych klientów w kontrolerze
-            except ConnectionError:
-                logger.warn("Connection error: %s" % str(sys.exc_info()))
-                break
+                    # TODO:: odsyłamy mu ImageMessage
+                # else: inny klient rozpropagował nam join
+            elif type(rcm) is ImageMessage:
+                # Drugi klient potwiedził podłączenie i przesłał nam obrazek
+                # Rejestrujemy
+                self.client_id = rcm.client_id
+                # Aktualizujemy obrazek w UI - w ramach kontrolera
+            elif type(rcm) is KeepAliveMessage:
+                # KeepAlive - aktualizujemy datę
+                self.last_alive = datetime.now()
+                # Nieprzesyłany dalej
+                continue
+            elif type(rcm) is QuitMessage:
+                if rcm.client_id == self.client_id:
+                    # Sam zdecydował się odejść - odłączamy
+                    self.enabled = False
+                # W kontrolerze klient usunięty
+            # Ładujemy do kolejki - kontroler obsłuży
+            self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+            # Wysłanie do pozostałych klientów w kontrolerze
         self.sock.close()
 
     def run(self):
         """
         Pętla wątku peera
         """
-        # Wysyłamy wiadomość "join"
-        msg = JoinMessage(own_id)
-        self.send(msg.to_bytes())
+        if not self.is_incoming:
+            # Wysyłamy wiadomość "join"
+            msg = JoinMessage(own_id)
+            self.send(msg.to_bytes())
 
         # Wchodzimy w tryb odbierania
         self.receive()
@@ -144,6 +157,7 @@ class PeerPool(Thread):
                 sock.settimeout(None)
                 peer = Peer(conn, self.stop_event, self.queue_to_ui)
                 self.peers.append(peer)
+                peer.is_incoming = True
                 peer.start()
             except timeout:
                 pass
@@ -165,7 +179,7 @@ class PeerPool(Thread):
         peer.start()
 
     def send(self, data: Message, excluded_client_id=None):
-        """ Wysyła dane do wszystkich zarejestrowanych klientów klientów
+        """ Wysyła dane do wszystkich zarejestrowanych klientów
         :param data: dane komunikatu
         :param excluded_client_id: klient, którego należy pominąć przy wysyłaniu
         """
@@ -175,11 +189,33 @@ class PeerPool(Thread):
         for peer in self.peers:
             bytedata = data.to_bytes()
             if peer.is_active() and peer.client_id != excluded_client_id:
-                try:
-                    peer.send(bytedata)
-                except ConnectionError:
-                    logger.error("Error during sending to peer: %s. DISCONNECTING" % peer.client_id)
-                    self.__remove_peer(peer)
+                self.__send_to_peer(peer, bytedata)
+
+    def send_to_client(self, msg: Message, client_id: str):
+        """ Wysyła komunikat do klienta o podanym identyfikatorze
+        :param msg: dane komunikat
+        :param client_id: identyfikator klienta
+        """
+        for peer in self.peers:
+            if peer.client_id == client_id:
+                if peer.is_active():
+                    self.__send_to_peer(peer, msg.to_bytes())
+                else:
+                    logger.warn("Peer %s not active!" % client_id)
+                return
+        logger.warn("Client with id: %s not found" % client_id)
+
+    def __send_to_peer(self, peer: Peer, bytedata: bytes):
+        """ Wysyła dane do danego klienta
+        W przypadku błędu komunikacji klient jest usuwany.
+        :param peer: klient
+        :param bytedata: dane
+        """
+        try:
+            peer.send(bytedata)
+        except ConnectionError:
+            logger.error("Error during sending to peer: %s. DISCONNECTING" % peer.client_id)
+            self.__remove_peer(peer)
 
     def check_alive(self):
         """ Sprawdza, czy klienci są żywi i wyłącza ich, jeśli nie
