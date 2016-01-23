@@ -21,6 +21,8 @@ class Message:
         :return: tablica bajtów
         """
         jsondata = self.to_json()
+        # Dla Bogdana
+        jsondata += '\n'
         bytedata = bytes(jsondata, encoding='utf8')
         return bytedata
 
@@ -72,7 +74,7 @@ class ImageMessage(Message):
         msg = {
             'type': 'image',
             'clientId': self.client_id,
-            'imagePart': None,
+            'image': None,
             'partId': 0,
             'partsAmount': 1
         }

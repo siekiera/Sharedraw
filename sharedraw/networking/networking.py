@@ -53,12 +53,17 @@ class Peer(Thread):
     def receive(self):
         """ Odczytuje dane z gniazda
         """
+        builder = MessageBuilder()
         while self.enabled and not self.stop_event.is_set():
             try:
                 msg = self.sock.recv(65536)
                 if not msg:
                     continue
-                data = msg.decode("utf-8")
+                full_msg = builder.append(msg).fetch()
+                if not full_msg:
+                    logger.debug("Raw received data: %s" % msg)
+                    continue
+                data = full_msg.decode("utf-8")
                 logger.info('Packet received: %s' % data)
                 rcm = from_json(data)
                 if not rcm:
@@ -90,7 +95,7 @@ class Peer(Thread):
                 self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
                 # Wysłanie do pozostałych klientów w kontrolerze
             except ConnectionError:
-                logger.warn("Connection error: %s" % sys.exc_info())
+                logger.warn("Connection error: %s" % str(sys.exc_info()))
                 break
         self.sock.close()
 
@@ -222,3 +227,53 @@ class KeepAliveSender(TimerThread):
         self.peer_pool.send(msg)
         # Sprawdzamy, czy klienty są aktywne - TODO:: może inne zadanie na to?
         self.peer_pool.check_alive()
+
+
+class MessageBuilder():
+    """ Klasa do budowania komunikatów - niektóre klienty wysyłają je w częściach, zatem trzeba poskładać do całości
+    """
+    def __init__(self):
+        self.msg = bytes()
+        self.left_par_count = 0
+        self.right_par_count = 0
+
+    def append(self, rawdata: bytes):
+        """ Dodaje bajty to buildera
+        :param rawdata: bajty (część komunikatu)
+        :return: instancja buildera
+        """
+        self.msg += rawdata
+        self._parse_pars(rawdata)
+        return self
+
+    def fetch(self):
+        """ Pobiera komunikat
+        Jeśli komunikat jest błędny lub niedokończony zwraca None
+        :return: pełny komunikat w postaci bajtów lub None, jeśli się nie da
+        """
+        if self.left_par_count == self.right_par_count:
+            # Komunikat zakończony - zwracamy
+            result = self.msg
+        elif self.left_par_count > self.right_par_count:
+            # Komunikat niedokończony - zwracamy None, zostanie dokończony potem
+            logger.debug("Received incomplete message... waiting for the rest")
+            return None
+        else:
+            # Komunikat błędny
+            logger.error("Invalid message - contains more right parenthesis than left. Dropping")
+            result = None
+        self._reset()
+        return result
+
+    def _parse_pars(self, rawdata: bytes):
+        for byte in rawdata:
+            char = chr(byte)
+            if char == '{':
+                self.left_par_count += 1
+            elif char == '}':
+                self.right_par_count += 1
+
+    def _reset(self):
+        self.msg = bytes()
+        self.left_par_count = 0
+        self.right_par_count = 0
