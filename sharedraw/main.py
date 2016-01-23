@@ -1,6 +1,3 @@
-import logging
-import sys
-
 from sharedraw.config import config
 from sharedraw.cntrl import *
 

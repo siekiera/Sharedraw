@@ -1,5 +1,9 @@
 import json
 import logging
+import sys
+
+from sharedraw.config import own_id
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +36,20 @@ class PaintMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['coords']:
+        if not msg['pointList']:
             logger.error('No coords!')
-        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['coords']))
+        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['pointList']))
         return PaintMessage(changed_pxs, 'white' if msg['color'] == '255' else 'black')
 
     def to_json(self):
         data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
-        msg = {'paint': {
-            'clientId': 'foo',
-            'coords': data,
-            'startLine': 'true',
+        msg = {
+            'type': 'paint',
+            'clientId': own_id,
+            'pointList': data,
+            # 'startLine': 'true',
             'color': '255' if self.color == 'white' else '0'
-        }}
+        }
         return json.dumps(msg)
 
 
@@ -60,16 +65,17 @@ class ImageMessage(Message):
         # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
         if not msg['clientId']:
             logger.error('No clientId!')
-        return JoinMessage(msg['clientId'])
+        return ImageMessage(msg['clientId'])
 
     def to_json(self):
         # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
-        msg = {'image': {
+        msg = {
+            'type': 'image',
             'clientId': self.client_id,
             'imagePart': None,
             'partId': 0,
             'partsAmount': 1
-        }}
+        }
         return json.dumps(msg)
 
 
@@ -87,9 +93,10 @@ class JoinMessage(Message):
         return JoinMessage(msg['clientId'])
 
     def to_json(self):
-        msg = {'joined': {
+        msg = {
+            'type': 'joined',
             'clientId': self.client_id
-        }}
+        }
         return json.dumps(msg)
 
 
@@ -107,9 +114,10 @@ class QuitMessage(Message):
         return QuitMessage(msg['clientId'])
 
     def to_json(self):
-        msg = {'quit': {
+        msg = {
+            'type': 'quit',
             'clientId': self.client_id
-        }}
+        }
         return json.dumps(msg)
 
 
@@ -127,9 +135,10 @@ class KeepAliveMessage(Message):
         return KeepAliveMessage(msg['clientId'])
 
     def to_json(self):
-        msg = {'keepAlive': {
+        msg = {
+            'type': 'keepAlive',
             'clientId': self.client_id
-        }}
+        }
         return json.dumps(msg)
 
 
@@ -147,10 +156,12 @@ class CleanMessage(Message):
         return CleanMessage(msg['clientId'])
 
     def to_json(self):
-        msg = {'clean': {
+        msg = {
+            'type': 'clean',
             'clientId': self.client_id
-        }}
+        }
         return json.dumps(msg)
+
 
 message_type_handlers = {
     'paint': PaintMessage.from_json,
@@ -163,17 +174,22 @@ message_type_handlers = {
 
 
 def from_json(jsonstr: str):
-    data = json.loads(jsonstr)
-    if len(data) != 1:
-        logger.error("Nieprawidłowy komunikat!")
-        return
-    # Klucz pierwszego elementu - typ komunikatu
-    message_type = list(data.keys())[0]
-    h = message_type_handlers.get(message_type)
-    if not h:
-        logger.error("Nieznany typ komunikatu: %s" % message_type)
-    # Wywołanie funkcji obsługującej: f(jsonobj)
-    return h(data[message_type])
+    try:
+        data = json.loads(jsonstr)
+        # if len(data) != 1:
+        if not data['type']:
+            logger.error("Nieprawidłowy komunikat!")
+            return
+        # Element type - typ komunikatu
+        message_type = data['type']
+        h = message_type_handlers.get(message_type)
+        if not h:
+            logger.error("Nieznany typ komunikatu: %s" % message_type)
+        # Wywołanie funkcji obsługującej: f(jsonobj)
+        return h(data)
+    except (ValueError, KeyError):
+        logger.error("Cannot decode: %s, error: %s" % (jsonstr, sys.exc_info()))
+        return None
 
 
 class SignedMessage:

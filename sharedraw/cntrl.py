@@ -32,7 +32,8 @@ class Controller(Thread):
                 ImageMessage: self._handle_image_msg,
                 # Dołączenie klienta
                 JoinMessage: lambda m: self._add_client(m.client_id),
-                QuitMessage: lambda m: self._remove_client(m.client_id)
+                QuitMessage: lambda m: self._remove_client(m.client_id),
+                CleanMessage: lambda m: self.sd_ui.clean()
             }.get(type(sm.message))
 
             if action:
@@ -54,3 +55,4 @@ class Controller(Thread):
         except ValueError:
             logger.info("Value cannot be removed! %s" % client_id)
         self.sd_ui.update_clients_info(self.clients)
+

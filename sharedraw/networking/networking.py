@@ -1,26 +1,16 @@
-import random
-import string
 from datetime import datetime
 from queue import Queue
 from socket import *
 from threading import Event, Thread
 
-from sharedraw.config import config
+from sharedraw.config import config, own_id
+
 from sharedraw.concurrent.threading import TimerThread
 from sharedraw.networking.messages import *
 
+
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
-
-
-def get_own_id():
-    datepart = datetime.now().strftime("%H%M%S%f")
-    randompart = ''.join(
-            random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(6))
-    return datepart + randompart
-
-
-own_id = get_own_id()
 
 
 class Peer(Thread):
@@ -37,7 +27,7 @@ class Peer(Thread):
         self.enabled = True
         self.setDaemon(True)
         self.last_alive = datetime.now()
-        logger.debug("Peer created: %s, %s" % sock.getsockname())
+        logger.debug("Peer created: %s, %s" % sock.getpeername())
 
     def is_active(self):
         """ Zwraca klient jest aktywny tj. może się komunikować
@@ -64,37 +54,44 @@ class Peer(Thread):
         """ Odczytuje dane z gniazda
         """
         while self.enabled and not self.stop_event.is_set():
-            msg = self.sock.recv(65536)
-            if not msg:
-                continue
-            data = msg.decode("utf-8")
-            logger.info('Packet received: %s' % data)
-            rcm = from_json(data)
-            if type(rcm) is JoinMessage:
-                if not self.is_registered():
-                    # Nowy klient podłączył się do nas i wysłał join
-                    # Rejestrujemy klienta
+            try:
+                msg = self.sock.recv(65536)
+                if not msg:
+                    continue
+                data = msg.decode("utf-8")
+                logger.info('Packet received: %s' % data)
+                rcm = from_json(data)
+                if not rcm:
+                    continue
+                if type(rcm) is JoinMessage:
+                    if not self.is_registered():
+                        # Nowy klient podłączył się do nas i wysłał join
+                        # Rejestrujemy klienta
+                        self.client_id = rcm.client_id
+                        # TODO:: odsyłamy mu ImageMessage
+                        # else: inny klient rozpropagował nam join
+                elif type(rcm) is ImageMessage:
+                    # Drugi klient potwiedził podłączenie i przesłał nam obrazek
+                    # Rejestrujemy
                     self.client_id = rcm.client_id
-                    # TODO:: odsyłamy mu ImageMessage
-                # else: inny klient rozpropagował nam join
-            elif type(rcm) is ImageMessage:
-                # Drugi klient potwiedził podłączenie i przesłał nam obrazek
-                # Rejestrujemy
-                self.client_id = rcm.client_id
-                # Aktualizujemy obrazek w UI - w ramach kontrolera
-            elif type(rcm) is KeepAliveMessage:
-                # KeepAlive - aktualizujemy datę
-                self.last_alive = datetime.now()
-                # Nieprzesyłany dalej
-                continue
-            elif type(rcm) is QuitMessage:
-                if rcm.client_id == self.client_id:
-                    # Sam zdecydował się odejść - odłączamy
-                    self.enabled = False
-                # W kontrolerze klient usunięty
-            # Ładujemy do kolejki - kontroler obsłuży
-            self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
-            # Wysłanie do pozostałych klientów w kontrolerze
+                    # Aktualizujemy obrazek w UI - w ramach kontrolera
+                elif type(rcm) is KeepAliveMessage:
+                    # KeepAlive - aktualizujemy datę
+                    self.last_alive = datetime.now()
+                    logger.debug('Last alive time of client: %s updated: %s' % (self.client_id, self.last_alive))
+                    # Nieprzesyłany dalej
+                    continue
+                elif type(rcm) is QuitMessage:
+                    if rcm.client_id == self.client_id:
+                        # Sam zdecydował się odejść - odłączamy
+                        self.enabled = False
+                        # W kontrolerze klient usunięty
+                # Ładujemy do kolejki - kontroler obsłuży
+                self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+                # Wysłanie do pozostałych klientów w kontrolerze
+            except ConnectionError:
+                logger.warn("Connection error: %s" % sys.exc_info())
+                break
         self.sock.close()
 
     def run(self):
@@ -122,6 +119,7 @@ class PeerPool(Thread):
         self.running = True
         self.stop_event = stop_event
         self.queue_to_ui = queue_to_ui
+        self.ip = gethostbyname(gethostname())
         self.setDaemon(True)
 
     def run(self):
@@ -132,7 +130,7 @@ class PeerPool(Thread):
         sock = self.server_sock = socket(AF_INET, SOCK_STREAM)
         # Dzięki tej opcji gniazda nie powinny zostawać otwarte
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sock.bind(('localhost', self.port))
+        sock.bind((self.ip, self.port))
         sock.listen(1)
         while self.running:
             try:

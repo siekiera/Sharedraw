@@ -1,7 +1,8 @@
 from tkinter import *
 # from PIL import Image, ImageDraw
-from sharedraw.networking.messages import PaintMessage, ImageMessage
-from sharedraw.networking.networking import PeerPool, own_id
+from sharedraw.config import own_id, config
+from sharedraw.networking.messages import PaintMessage, ImageMessage, CleanMessage
+from sharedraw.networking.networking import PeerPool
 
 __author__ = 'michalek'
 
@@ -51,6 +52,11 @@ class SharedrawUI:
         # TODO
         pass
 
+    def clean(self):
+        """ Czyści obrazek
+        """
+        self.ui.drawer.clean_img()
+
     def update_clients_info(self, clients: []):
         self.ui.update_clients_info(clients)
 
@@ -66,14 +72,17 @@ class MainFrame(Frame):
         # self.c = None
 
     def init(self):
-        self.parent.title("Sharedraw [localhost:%s, id: %s]" % (self.ui.peer_pool.port, own_id))
+        self.parent.title("Sharedraw [%s:%s, id: %s]" % (self.ui.peer_pool.ip, self.ui.peer_pool.port, own_id))
         self.drawer = Drawer(self.parent, WIDTH, HEIGHT, self.save)
         self.clients_info = StringVar()
         Label(self.parent, textvariable=self.clients_info).pack()
         self.update_clients_info([])
-        self.b = Button(self.parent, text="Zapisz")
-        self.b.pack()
-        self.b.bind("<Button-1>", self.save)
+        b = Button(self.parent, text="Zapisz")
+        b.pack()
+        b.bind("<Button-1>", self.save)
+        clean_btn = Button(self.parent, text="Czyść")
+        clean_btn.pack()
+        clean_btn.bind('<Button-1>', self.clean)
         connect_btn = Button(self.parent, text="Podłącz")
         connect_btn.pack()
         connect_btn.bind("<Button-1>", self.connect)
@@ -88,6 +97,15 @@ class MainFrame(Frame):
         self.ui.peer_pool.send(msg)
         # Reset listy punktów
         self.drawer.changed_pxs = []
+
+    def clean(self, e):
+        """ Czyści obrazek oraz wysyła komunikat o wyczyszczeniu
+        :param e: zdarzenie
+        :return:
+        """
+        self.drawer.clean_img()
+        msg = CleanMessage(own_id)
+        self.ui.peer_pool.send(msg)
 
     def connect(self, e):
         """ Uruchamia okno dialogowe do podłączenia się z innym klientem
@@ -140,6 +158,12 @@ class Drawer():
         self.changed_pxs.append((e.x, e.y))
         # print('e (%s,%s)' % (e.x, e.y))
         # print('self (%s,%s)' % (self.x, self.y))
+        # Limit w celu zapewnienia płynności
+        if len(self.changed_pxs) > config.line_max_length:
+            # Wysyłamy
+            self.send(e)
+            # Linia zawiera tylko ostatni punkt
+            self.changed_pxs.append((self.x, self.y))
 
     def release(self, e):
         self.x = None
@@ -160,6 +184,12 @@ class Drawer():
             prevx, prevy = x, y
         self.x, self.y = (None, None)
 
+    def clean_img(self):
+        """ Czyści obrazek
+        """
+        self.c.delete('all')
+        self.changed_pxs = []
+
     def as_png(self):
         # TODO:: prawdopodobnie do usunięcia
         # imgbytearr = io.BytesIO()
@@ -176,11 +206,11 @@ class ConnectDialog:
         self.ui = ui
         Label(top, text="IP").pack()
         self.ip_entry = Entry(top)
-        self.ip_entry.insert(0, "127.0.0.1")
+        self.ip_entry.insert(0, ui.peer_pool.ip)
         self.ip_entry.pack()
         Label(top, text="Port").pack()
         self.port_entry = Entry(top)
-        self.port_entry.insert(0, "12345")
+        self.port_entry.insert(0, "5555")
         self.port_entry.pack()
 
         b = Button(top, text="Połącz", command=self.connect)
