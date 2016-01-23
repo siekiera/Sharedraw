@@ -46,7 +46,8 @@ class Controller(Thread):
         self.sd_ui.update_image(msg)
 
     def _add_client(self, client_id: str):
-        self.clients.append(client_id)
+        if client_id not in self.clients:
+            self.clients.append(client_id)
         self.sd_ui.update_clients_info(self.clients)
 
     def _remove_client(self, client_id: str):
