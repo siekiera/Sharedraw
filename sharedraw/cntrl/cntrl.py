@@ -1,5 +1,6 @@
 from queue import Queue
 from threading import Thread, Event
+from sharedraw.cntrl.sync import ClientsTable
 
 from sharedraw.networking.messages import *
 from sharedraw.networking.networking import PeerPool, KeepAliveSender
@@ -21,7 +22,9 @@ class Controller(Thread):
         self.sd_ui = SharedrawUI(self.peer_pool)
         self.keep_alive_sender = KeepAliveSender(stop_event, self.peer_pool)
         # Lista klientów
-        self.clients = []
+        self.clients = ClientsTable()
+        self.clients.add(own_id)
+        self.sd_ui.update_clients_info(self.clients.get_client_ids())
 
     def run(self):
         while not self.stop_event.is_set():
@@ -42,24 +45,27 @@ class Controller(Thread):
             self.peer_pool.send(sm.message, sm.client_id)
 
     def _handle_image_msg(self, msg: ImageMessage):
+        self.clients.update_with_id_list(msg.client_ids)
         self._add_client(msg.client_id)
         self.sd_ui.update_image(msg)
 
     def _handle_join_msg(self, msg: JoinMessage):
-        self._add_client(msg.client_id)
-        if msg.send_back_img:
+        if msg.received_from_id:
+            # Przeproxowany klient - dodajemy do listy z informacją, kto wysłał
+            self._add_client(msg.client_id, msg.received_from_id)
+        else:
+            self._add_client(msg.client_id)
             # Odsyłamy ImageMessage, jeśli to klient, który podłączył się do nas
-            img_msg = ImageMessage(own_id, self.sd_ui.get_png())
+            img_msg = ImageMessage(own_id, self.sd_ui.get_png(), self.clients.get_client_ids())
             self.peer_pool.send_to_client(img_msg, msg.client_id)
 
-    def _add_client(self, client_id: str):
-        if client_id not in self.clients:
-            self.clients.append(client_id)
-        self.sd_ui.update_clients_info(self.clients)
+    def _add_client(self, client_id: str, received_from_id=None):
+        self.clients.add(client_id, received_from_id)
+        self.sd_ui.update_clients_info(self.clients.get_client_ids())
 
     def _remove_client(self, client_id: str):
         try:
             self.clients.remove(client_id)
         except ValueError:
             logger.info("Value cannot be removed! %s" % client_id)
-        self.sd_ui.update_clients_info(self.clients)
+        self.sd_ui.update_clients_info(self.clients.get_client_ids())

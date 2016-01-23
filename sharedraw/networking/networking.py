@@ -73,8 +73,10 @@ class Peer(Thread):
                         # Nowy klient podłączył się do nas i wysłał join
                         # Rejestrujemy klienta
                         self.client_id = rcm.client_id
-                        # W kontrolerze odsyłamy mu ImageMessage
-                        rcm.send_back_img = True
+                        # Sam się zgłosił - w kontrolerze odsyłamy mu ImageMessage
+                        rcm.received_from_id = None
+                    else:
+                        rcm.received_from_id = self.client_id
                 elif type(rcm) is ImageMessage:
                     # Drugi klient potwiedził podłączenie i przesłał nam obrazek
                     # Rejestrujemy

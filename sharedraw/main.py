@@ -1,5 +1,5 @@
 from sharedraw.config import config
-from sharedraw.cntrl import *
+from sharedraw.cntrl.cntrl import *
 
 __author__ = 'Michał Toporowski'
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)s %(levelname)s %(message)s')
