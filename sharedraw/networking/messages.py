@@ -2,11 +2,32 @@ import base64
 import json
 import logging
 import sys
+from collections import namedtuple
 
 from sharedraw.config import own_id
 
-
 logger = logging.getLogger(__name__)
+
+TYPE = 'type'
+CLIENT_ID = 'clientId'
+POINT_LIST = 'pointList'
+IMAGE = 'image'
+COLOR = 'color'
+DEST_CLIENT_ID = 'destClientId'
+LAST_REQ_TIME = 'lastRequestLogicalTime'
+LAST_BLOCK_TIME = 'lastBlockadeLogicalTime'
+RICART_TABLE = 'ricartTable'
+LOG_TIME = 'logicalTime'
+
+PAINT_TYPE = 'paint'
+IMAGE_TYPE = 'image'
+JOIN_TYPE = 'join'
+QUIT_TYPE = 'quit'
+KEEP_ALIVE_TYPE = 'keepAlive'
+CLEAN_TYPE = 'clean'
+REQUEST_TYPE = 'request'
+RESIGN_TYPE = 'resign'
+PASS_TOKEN_TYPE = 'passToken'
 
 
 class Message:
@@ -39,19 +60,19 @@ class PaintMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['pointList']:
+        if not msg[POINT_LIST]:
             logger.error('No coords!')
-        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg['pointList']))
-        return PaintMessage(changed_pxs, 'white' if msg['color'] == '255' else 'black')
+        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg[POINT_LIST]))
+        return PaintMessage(changed_pxs, 'white' if msg[COLOR] == '255' else 'black')
 
     def to_json(self):
         data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
         msg = {
-            'type': 'paint',
-            'clientId': own_id,
-            'pointList': data,
+            TYPE: PAINT_TYPE,
+            CLIENT_ID: own_id,
+            POINT_LIST: data,
             # 'startLine': 'true',
-            'color': '255' if self.color == 'white' else '0'
+            COLOR: '255' if self.color == 'white' else '0'
         }
         return json.dumps(msg)
 
@@ -67,19 +88,18 @@ class ImageMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['clientId']:
+        if not msg[CLIENT_ID]:
             logger.error('No clientId!')
-        if not msg['image']:
+        if not msg[IMAGE]:
             logger.error('No image!')
-        return ImageMessage(msg['clientId'], base64.b64decode(msg['image']), msg['clientList'])
+        return ImageMessage(msg[CLIENT_ID], base64.b64decode(msg[IMAGE]), msg['clientList'])
 
     def to_json(self):
-        # TODO: na razie brak obsługi danych obrazu, pobieramy tylko clientId
         msg = {
-            'type': 'image',
-            'clientId': self.client_id,
+            TYPE: IMAGE,
+            CLIENT_ID: self.client_id,
             'clientList': self.client_ids,
-            'image': str(base64.b64encode(self.rawdata), encoding="utf8")
+            IMAGE: str(base64.b64encode(self.rawdata), encoding="utf8")
         }
         return json.dumps(msg)
 
@@ -98,14 +118,14 @@ class JoinMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['clientId']:
+        if not msg[CLIENT_ID]:
             logger.error('No clientId!')
-        return JoinMessage(msg['clientId'])
+        return JoinMessage(msg[CLIENT_ID])
 
     def to_json(self):
         msg = {
-            'type': 'joined',
-            'clientId': self.client_id
+            TYPE: JOIN_TYPE,
+            CLIENT_ID: self.client_id
         }
         return json.dumps(msg)
 
@@ -119,14 +139,14 @@ class QuitMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['clientId']:
+        if not msg[CLIENT_ID]:
             logger.error('No clientId!')
-        return QuitMessage(msg['clientId'])
+        return QuitMessage(msg[CLIENT_ID])
 
     def to_json(self):
         msg = {
-            'type': 'quit',
-            'clientId': self.client_id
+            TYPE: QUIT_TYPE,
+            CLIENT_ID: self.client_id
         }
         return json.dumps(msg)
 
@@ -140,16 +160,96 @@ class KeepAliveMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['clientId']:
+        if not msg[CLIENT_ID]:
             logger.error('No clientId!')
-        return KeepAliveMessage(msg['clientId'])
+        return KeepAliveMessage(msg[CLIENT_ID])
 
     def to_json(self):
         msg = {
-            'type': 'keepAlive',
-            'clientId': self.client_id
+            TYPE: KEEP_ALIVE_TYPE,
+            CLIENT_ID: self.client_id
         }
         return json.dumps(msg)
+
+
+class RequestTableMessage(Message):
+    """ Żądanie przejęcia tablicy na własność
+    """
+
+    def __init__(self, client_id: str, logical_time: int):
+        self.client_id = client_id
+        self.logical_time = logical_time
+
+    @staticmethod
+    def from_json(msg: {}):
+        return RequestTableMessage(msg[CLIENT_ID], int(msg[LOG_TIME]))
+
+    def to_json(self):
+        msg = {
+            TYPE: REQUEST_TYPE,
+            CLIENT_ID: self.client_id,
+            LOG_TIME: self.logical_time
+        }
+        return json.dumps(msg)
+
+
+class ResignMessage(Message):
+    """ Komunikat informujący o rezygnacji z posiadania tablicy
+    """
+
+    def __init__(self, client_id: str, logical_time: int):
+        self.client_id = client_id
+        self.logical_time = logical_time
+
+    @staticmethod
+    def from_json(msg: {}):
+        return ResignMessage(msg[CLIENT_ID], int(msg[LOG_TIME]))
+
+    def to_json(self):
+        msg = {
+            TYPE: RESIGN_TYPE,
+            CLIENT_ID: self.client_id,
+            LOG_TIME: self.logical_time
+        }
+        return json.dumps(msg)
+
+
+class PassTokenMessage(Message):
+    """ Komunikat informujący o przekazaniu tokena (własności tablicy)
+    """
+
+    def __init__(self, dest_client_id: str, ricart_table: []):
+        self.dest_client_id = dest_client_id
+        self.ricart_table = ricart_table
+
+    @staticmethod
+    def from_json(msg: {}):
+        rt = list(map(dict_to_rtr, msg[RICART_TABLE]))
+        return PassTokenMessage(msg[CLIENT_ID], rt)
+
+    def to_json(self):
+        rt_dict = list(map(rtr_to_dict, self.ricart_table))
+        msg = {
+            TYPE: PASS_TOKEN_TYPE,
+            DEST_CLIENT_ID: self.dest_client_id,
+            RICART_TABLE: rt_dict
+        }
+        return json.dumps(msg)
+
+
+RicartTableRow = namedtuple('RicartTableRow', 'id g r')
+
+
+def rtr_to_dict(rtr: RicartTableRow):
+    return {
+        CLIENT_ID: rtr.id,
+        LAST_REQ_TIME: rtr.r,
+        LAST_BLOCK_TIME: rtr.g
+    }
+
+
+def dict_to_rtr(d: {}):
+    return RicartTableRow(d[CLIENT_ID], d[LAST_BLOCK_TIME], d[LAST_REQ_TIME])
 
 
 class CleanMessage(Message):
@@ -161,24 +261,25 @@ class CleanMessage(Message):
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg['clientId']:
+        if not msg[CLIENT_ID]:
             logger.error('No clientId!')
-        return CleanMessage(msg['clientId'])
+        return CleanMessage(msg[CLIENT_ID])
 
     def to_json(self):
         msg = {
-            'type': 'clean',
-            'clientId': self.client_id
+            TYPE: CLEAN_TYPE,
+            CLIENT_ID: self.client_id
         }
         return json.dumps(msg)
 
+
 message_type_handlers = {
-    'paint': PaintMessage.from_json,
-    'joined': JoinMessage.from_json,
-    'image': ImageMessage.from_json,
-    'keepAlive': KeepAliveMessage.from_json,
-    'quit': QuitMessage.from_json,
-    'clean': CleanMessage.from_json
+    PAINT_TYPE: PaintMessage.from_json,
+    JOIN_TYPE: JoinMessage.from_json,
+    IMAGE_TYPE: ImageMessage.from_json,
+    KEEP_ALIVE_TYPE: KeepAliveMessage.from_json,
+    QUIT_TYPE: QuitMessage.from_json,
+    CLEAN_TYPE: CleanMessage.from_json
 }
 
 
@@ -186,11 +287,11 @@ def from_json(jsonstr: str):
     try:
         data = json.loads(jsonstr)
         # if len(data) != 1:
-        if not data['type']:
+        if not data[TYPE]:
             logger.error("Nieprawidłowy komunikat!")
             return
         # Element type - typ komunikatu
-        message_type = data['type']
+        message_type = data[TYPE]
         h = message_type_handlers.get(message_type)
         if not h:
             logger.error("Nieznany typ komunikatu: %s" % message_type)
