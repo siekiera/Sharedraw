@@ -1,9 +1,13 @@
 import io
 from tkinter import *
+from tkinter.ttk import Treeview, Style
+
 from PIL import Image, ImageDraw, ImageTk
+
+from sharedraw.cntrl.sync import ClientsTable
 from sharedraw.config import own_id, config
 from sharedraw.networking.messages import *
-from sharedraw.networking.networking import PeerPool, own_id
+from sharedraw.networking.networking import PeerPool
 
 __author__ = 'michalek'
 
@@ -13,6 +17,7 @@ WIDTH, HEIGHT = 640, 480
 class SharedrawUI:
     """ Fasada widoku aplikacji
     """
+
     def __init__(self, peer_pool: PeerPool):
         self.root = Tk()
         self.peer_pool = peer_pool
@@ -21,7 +26,6 @@ class SharedrawUI:
     def start(self):
         """ Uruchamia UI
         """
-        # self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.mainloop()
 
     def get_png(self):
@@ -57,13 +61,14 @@ class SharedrawUI:
         """
         self.ui.drawer.clean_img()
 
-    def update_clients_info(self, clients: []):
+    def update_clients_info(self, clients: ClientsTable):
         self.ui.update_clients_info(clients)
 
 
 class MainFrame(Frame):
     """ Główna ramka aplikacji
     """
+
     def __init__(self, ui: SharedrawUI):
         Frame.__init__(self, ui.root)
         self.parent = ui.root
@@ -74,9 +79,15 @@ class MainFrame(Frame):
     def init(self):
         self.parent.title("Sharedraw [%s:%s, id: %s]" % (self.ui.peer_pool.ip, self.ui.peer_pool.port, own_id))
         self.drawer = Drawer(self.parent, WIDTH, HEIGHT, self.save)
-        self.clients_info = StringVar()
-        Label(self.parent, textvariable=self.clients_info).pack()
-        self.update_clients_info([])
+        # self.clients_info = StringVar()
+        # Label(self.parent, textvariable=self.clients_info).pack()
+        self.clients_table = Treeview(self.parent, columns=('R', 'G', 'from'))
+        self.clients_table.heading('#0', text='Id')
+        self.clients_table.heading('R', text='R')
+        self.clients_table.heading('G', text='G')
+        self.clients_table.heading('from', text='Otrzymano od:')
+        self.clients_table.pack()
+        # self.update_clients_info([])
         b = Button(self.parent, text="Zapisz")
         b.pack()
         b.bind("<Button-1>", self.save)
@@ -115,8 +126,12 @@ class MainFrame(Frame):
         d = ConnectDialog(self.ui)
         self.parent.wait_window(d.top)
 
-    def update_clients_info(self, clients: []):
-        self.clients_info.set("Podłączone klienty: %s" % str(clients))
+    def update_clients_info(self, clients: ClientsTable):
+        # self.clients_info.set("Podłączone klienty: %s" % str(clients))
+        for ch in self.clients_table.get_children():
+            self.clients_table.delete(ch)
+        for client in clients.clients:
+            self.clients_table.insert('', 'end', text=client.id, values=(client.granted, client.requested, client.received_from_id))
 
 
 class Drawer:
@@ -155,8 +170,6 @@ class Drawer:
         self.x = e.x
         self.y = e.y
         self.changed_pxs.append((e.x, e.y))
-        # print('e (%s,%s)' % (e.x, e.y))
-        # print('self (%s,%s)' % (self.x, self.y))
         # Limit w celu zapewnienia płynności
         if len(self.changed_pxs) > config.line_max_length:
             # Wysyłamy
@@ -197,17 +210,16 @@ class Drawer:
 
     def update_with_png(self, raw_data: bytes):
         stream = io.BytesIO(raw_data)
-        # self.img.frombytes(raw_data, decoder_name='PNG')
         png = Image.open(stream).convert('RGB')
-        # self.img_draw = ImageDraw.Draw(self.img)
         self.img.paste(png)
         pi = ImageTk.PhotoImage(image=png, size=(WIDTH, HEIGHT))
-        self.c.create_image(WIDTH/2, HEIGHT/2, image=pi)
+        self.c.create_image(WIDTH / 2, HEIGHT / 2, image=pi)
 
 
 class ConnectDialog:
     """ Dialog otwierany do zdefiniowania ustawień połączenia
     """
+
     def __init__(self, ui: SharedrawUI):
         top = self.top = Toplevel(ui.root)
         self.ui = ui

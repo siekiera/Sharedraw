@@ -93,6 +93,8 @@ class JoinMessage(Message):
         # Wewnętrzne pole - od kogo dostaliśmy
         # None, jeśli od niego samego - oznacza, że klientowi należy odesłać ImageMessage
         self.received_from_id = False
+        # Adres
+        self.address = None
 
     @staticmethod
     def from_json(msg: {}):

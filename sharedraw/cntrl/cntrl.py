@@ -24,7 +24,7 @@ class Controller(Thread):
         # Lista klientów
         self.clients = ClientsTable()
         self.clients.add(own_id)
-        self.sd_ui.update_clients_info(self.clients.get_client_ids())
+        self.sd_ui.update_clients_info(self.clients)
 
     def run(self):
         while not self.stop_event.is_set():
@@ -45,7 +45,7 @@ class Controller(Thread):
             self.peer_pool.send(sm.message, sm.client_id)
 
     def _handle_image_msg(self, msg: ImageMessage):
-        self.clients.update_with_id_list(msg.client_ids)
+        self.clients.update_with_id_list(msg.client_ids, msg.client_id)
         self._add_client(msg.client_id)
         self.sd_ui.update_image(msg)
 
@@ -61,11 +61,11 @@ class Controller(Thread):
 
     def _add_client(self, client_id: str, received_from_id=None):
         self.clients.add(client_id, received_from_id)
-        self.sd_ui.update_clients_info(self.clients.get_client_ids())
+        self.sd_ui.update_clients_info(self.clients)
 
     def _remove_client(self, client_id: str):
         try:
             self.clients.remove(client_id)
         except ValueError:
             logger.info("Value cannot be removed! %s" % client_id)
-        self.sd_ui.update_clients_info(self.clients.get_client_ids())
+        self.sd_ui.update_clients_info(self.clients)
