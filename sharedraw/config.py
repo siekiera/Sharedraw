@@ -12,6 +12,7 @@ class Config:
     port = 5555
     keep_alive_interval = 5
     keep_alive_timeout = 60000
+    token_ownership_max_time = 30
     line_max_length = 30
 
     def load(self):

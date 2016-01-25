@@ -18,6 +18,9 @@ LAST_REQ_TIME = 'lastRequestLogicalTime'
 LAST_BLOCK_TIME = 'lastBlockadeLogicalTime'
 RICART_TABLE = 'ricartTable'
 LOG_TIME = 'logicalTime'
+TOKEN = 'token'
+HAS_LOCK = 'hasLock'
+CLIENT_LIST = 'clientList'
 
 PAINT_TYPE = 'paint'
 IMAGE_TYPE = 'image'
@@ -26,7 +29,7 @@ QUIT_TYPE = 'quit'
 KEEP_ALIVE_TYPE = 'keepAlive'
 CLEAN_TYPE = 'clean'
 REQUEST_TYPE = 'request'
-RESIGN_TYPE = 'resign'
+RESIGN_TYPE = 'unlock'
 PASS_TOKEN_TYPE = 'passToken'
 
 
@@ -81,10 +84,12 @@ class ImageMessage(Message):
     """ Komunikat zawierający aktualny stan tablicy po dołączeniu się klienta
     """
 
-    def __init__(self, client_id: str, rawdata: bytes, client_ids: []):
+    def __init__(self, client_id: str, rawdata: bytes, client_ids: [], token_owner: str, locked: bool):
         self.client_id = client_id
         self.rawdata = rawdata
         self.client_ids = client_ids
+        self.token_owner = token_owner
+        self.locked = locked
 
     @staticmethod
     def from_json(msg: {}):
@@ -92,14 +97,20 @@ class ImageMessage(Message):
             logger.error('No clientId!')
         if not msg[IMAGE]:
             logger.error('No image!')
-        return ImageMessage(msg[CLIENT_ID], base64.b64decode(msg[IMAGE]), msg['clientList'])
+        token_node = msg[TOKEN]
+        return ImageMessage(msg[CLIENT_ID], base64.b64decode(msg[IMAGE]), msg[CLIENT_LIST], token_node[CLIENT_ID],
+                            token_node[HAS_LOCK])
 
     def to_json(self):
         msg = {
             TYPE: IMAGE,
             CLIENT_ID: self.client_id,
             'clientList': self.client_ids,
-            IMAGE: str(base64.b64encode(self.rawdata), encoding="utf8")
+            IMAGE: str(base64.b64encode(self.rawdata), encoding="utf8"),
+            TOKEN: {
+                CLIENT_ID: self.token_owner,
+                HAS_LOCK: self.locked
+            }
         }
         return json.dumps(msg)
 
@@ -197,19 +208,17 @@ class ResignMessage(Message):
     """ Komunikat informujący o rezygnacji z posiadania tablicy
     """
 
-    def __init__(self, client_id: str, logical_time: int):
+    def __init__(self, client_id: str):
         self.client_id = client_id
-        self.logical_time = logical_time
 
     @staticmethod
     def from_json(msg: {}):
-        return ResignMessage(msg[CLIENT_ID], int(msg[LOG_TIME]))
+        return ResignMessage(msg[CLIENT_ID])
 
     def to_json(self):
         msg = {
             TYPE: RESIGN_TYPE,
             CLIENT_ID: self.client_id,
-            LOG_TIME: self.logical_time
         }
         return json.dumps(msg)
 
@@ -225,7 +234,7 @@ class PassTokenMessage(Message):
     @staticmethod
     def from_json(msg: {}):
         rt = list(map(dict_to_rtr, msg[RICART_TABLE]))
-        return PassTokenMessage(msg[CLIENT_ID], rt)
+        return PassTokenMessage(msg[DEST_CLIENT_ID], rt)
 
     def to_json(self):
         rt_dict = list(map(rtr_to_dict, self.ricart_table))
@@ -279,7 +288,10 @@ message_type_handlers = {
     IMAGE_TYPE: ImageMessage.from_json,
     KEEP_ALIVE_TYPE: KeepAliveMessage.from_json,
     QUIT_TYPE: QuitMessage.from_json,
-    CLEAN_TYPE: CleanMessage.from_json
+    CLEAN_TYPE: CleanMessage.from_json,
+    REQUEST_TYPE: RequestTableMessage.from_json,
+    RESIGN_TYPE: ResignMessage.from_json,
+    PASS_TOKEN_TYPE: PassTokenMessage.from_json
 }
 
 
