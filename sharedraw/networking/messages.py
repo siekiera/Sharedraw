@@ -321,3 +321,7 @@ class SignedMessage:
     def __init__(self, client_id: str, message: Message):
         self.client_id = client_id
         self.message = message
+
+
+class InternalReloadMessage(Message):
+    pass

@@ -40,13 +40,16 @@ class Controller(Thread):
                 CleanMessage: lambda m: self.sd_ui.clean(),
                 PassTokenMessage: self._handle_pass_token_message,
                 RequestTableMessage: self._handle_request_message,
-                ResignMessage: self._handle_resign_message
+                ResignMessage: self._handle_resign_message,
+                InternalReloadMessage: lambda m: self._update_clients_info()
             }.get(type(sm.message))
 
             if action:
                 action(sm.message)
-            # Przesłanie komunikatu do pozostałych klientów
-            self.peer_pool.send(sm.message, sm.client_id)
+
+            if type(sm.message) is not InternalReloadMessage:
+                # Przesłanie komunikatu do pozostałych klientów
+                self.peer_pool.send(sm.message, sm.client_id)
 
     def _handle_image_msg(self, msg: ImageMessage):
         self.clients.update_with_id_list(msg.client_ids, msg.client_id)

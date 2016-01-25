@@ -2,7 +2,8 @@ import logging
 from threading import Timer
 
 from sharedraw.config import own_id, config
-from sharedraw.networking.messages import RequestTableMessage, PassTokenMessage, RicartTableRow, ResignMessage
+from sharedraw.networking.messages import RequestTableMessage, PassTokenMessage, RicartTableRow, ResignMessage, \
+    InternalReloadMessage, SignedMessage
 from sharedraw.networking.networking import PeerPool
 
 logger = logging.getLogger(__name__)
@@ -184,7 +185,7 @@ class OwnershipManager:
                 # Jeśli nie jest zablokowany, to od razu przekazujemy
                 if not self.__clients.locked:
                     self.resign()
-                # else: czekamy na resign lub koniec czasu
+                    # else: czekamy na resign lub koniec czasu
             else:
                 logger.warn('Client not found: %s' % msg.client_id)
         else:
@@ -232,3 +233,5 @@ class OwnershipManager:
     def __token_time_elapsed(self):
         logger.debug('Token ownership time elapsed!')
         self.resign()
+        # Wrzucamy wewnętrzny komunikat, żeby przeładowało
+        self.__peer_pool.queue_to_ui.put(SignedMessage(own_id, InternalReloadMessage()))
