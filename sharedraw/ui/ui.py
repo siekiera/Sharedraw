@@ -74,10 +74,7 @@ class MainFrame(Frame):
         Frame.__init__(self, ui.root)
         self.parent = ui.root
         self.ui = ui
-        self.init()
-        # self.c = None
 
-    def init(self):
         self.parent.title("Sharedraw [%s:%s, id: %s]" % (self.ui.peer_pool.ip, self.ui.peer_pool.port, own_id))
         self.drawer = Drawer(self.parent, WIDTH, HEIGHT, self.save)
         self.clients_table = Treeview(self.parent, columns=('R', 'G', 'from'))
@@ -94,23 +91,23 @@ class MainFrame(Frame):
         # Przycisk czyszczenia
         self._create_button(text="Czyść", func=self.clean)
         # Przycisk podłączenia
-        self._create_button(text="Podłącz", func=self.connect)
+        self.connect_btn = self._create_button(text="Podłącz", func=self.connect)
         # Przycisk żądania przejęcia na własność
-        self._create_button(text="Chcę przejąć tablicę", func=self._make_request)
+        self.req_btn = self._create_button(text="Chcę przejąć tablicę", func=self._make_request)
         # Rezygnacja z posiadania blokady
-        self._create_button(text='Zrezygnuj z blokady', func=self._resign)
+        self.resign_btn = self._create_button(text='Zrezygnuj z blokady', func=self._resign)
 
     def _create_button(self, text: str, func):
         """ Tworzy nowy przycisk w bieżącej ramce
         :param text: tekst przycisku
         :param func: funkcja wywoływana po naciśnięciu
-        :return: nic
+        :return: przycisk
         """
-        btn = Button(self.parent, text=text)
-        btn.bind('<Button-1>', func)
+        btn = Button(self.parent, text=text, command=func)
         btn.pack()
+        return btn
 
-    def save(self, e):
+    def save(self, e=None):
         """ Wysyła komunikat o zmianie obrazka do innych klientów
         :param e: zdarzenie
         :return:
@@ -130,18 +127,18 @@ class MainFrame(Frame):
         msg = CleanMessage(own_id)
         self.ui.peer_pool.send(msg)
 
-    def _make_request(self, e):
+    def _make_request(self):
         """ Żąda przejęcia tablicy na własność
         :return:
         """
         clients_info = self.ui.om.claim_ownership()
         self.update_clients_info(clients_info)
 
-    def _resign(self, e):
+    def _resign(self):
         clients_info = self.ui.om.resign()
         self.update_clients_info(clients_info)
 
-    def connect(self, e):
+    def connect(self):
         """ Uruchamia okno dialogowe do podłączenia się z innym klientem
         :param e: zdarzenie
         :return:
@@ -155,12 +152,27 @@ class MainFrame(Frame):
             self.clients_table.delete(ch)
         for client in clients.clients:
             self.clients_table.insert('', 'end', text=client.id,
-                                      values=(client.granted, client.requested, client.received_from_id))
+                                      values=(client.requested, client.granted, client.received_from_id))
         # Aktualizacja info o właścicielu tokena i blokadzie
         self.locked_label.update_text(clients.locked)
         self.token_owner_label.update_text(clients.token_owner)
         # Aktualizacja blokady
-        self.__set_lock_state(clients.locked, clients.token_owner == own_id)
+        has_token = clients.token_owner == own_id
+        self.__set_lock_state(clients.locked, has_token)
+        # Aktualizacja przycisków
+        # jeśli zablokowaliśmy, to nie możemy tego zrobić drugi raz
+        is_locker = (has_token and clients.locked)
+        # tak samo jeśli już zażądaliśmy
+        has_requested = clients.find_self().has_requested()
+        self.__set_button_enabled(self.req_btn, not (is_locker or has_requested))
+        # jeśli nie zablokowaliśmy, to nie możemy rezygnować
+        self.__set_button_enabled(self.resign_btn, is_locker)
+        # Możemy się podłączyć, tylko, jeśli nie jesteśmy do nikogo podłączeni
+        self.__set_button_enabled(self.connect_btn, len(clients.clients) <= 1)
+
+    @staticmethod
+    def __set_button_enabled(btn: Button, enabled: bool):
+        btn.configure(state=(NORMAL if enabled else DISABLED))
 
     def __set_lock_state(self, locked: bool, has_token: bool):
         self.drawer.locked = locked and not has_token

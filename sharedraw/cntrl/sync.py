@@ -105,6 +105,9 @@ class Client:
     def get_rtr(self):
         return RicartTableRow(self.id, self.granted, self.requested)
 
+    def has_requested(self):
+        return self.requested > self.granted
+
 
 class OwnershipManager:
     """ Klasa zarządzająca przejmowaniem tablicy na własność
@@ -132,7 +135,9 @@ class OwnershipManager:
             self.__register_token_ownership()
         else:
             # Nie mamy tokena - generujemy żądanie
-            msg = RequestTableMessage(own_id, self.__clock.increase())
+            req_time = self.__clock.increase()
+            self.__clients.find_self().requested = req_time
+            msg = RequestTableMessage(own_id, req_time)
         self.__peer_pool.send(msg)
         return self.__clients
 
@@ -144,9 +149,14 @@ class OwnershipManager:
         # Na wszelki wypadek
         if self.__has_token():
             self.__clients.locked = False
+            # Wpisujemy swój czas granted
+            self.__clients.find_self().granted = self.__clock.get()
             # Jeśli jakiś inny klient chce token, to przekazujemy
             next_owner = self.__pass_token()
-            if not next_owner:
+            if next_owner:
+                logger.debug('Table passed to client: %s' % next_owner)
+            else:
+                logger.debug('No client waiting for table, sending resign...')
                 # Jeśli nikt nie chciał, to wysyłamy resign
                 msg = ResignMessage(own_id)
                 self.__peer_pool.send(msg)
@@ -200,8 +210,6 @@ class OwnershipManager:
         if client:
             self.__clients.token_owner = client.id
             self.__clients.locked = True
-            # Wpisujemy swój czas granted
-            self.__clients.find_self().granted = self.__clock.get()
             # Generujemy komunikat przekazania
             msg = PassTokenMessage(client.id, self.__clients.to_ricart())
             self.__peer_pool.send(msg)
@@ -224,7 +232,7 @@ class OwnershipManager:
         size = len(self.__clients.clients)
         iterator = map(lambda i: self.__clients.clients[(i + own_idx) % size], range(1, size))
         # Znajdujemy pierwszego klienta na prawo, dla którego R > G
-        return next(filter(lambda c: c.requested > c.granted, iterator), None)
+        return next(filter(lambda c: c.has_requested(), iterator), None)
 
     def __register_token_ownership(self):
         # Odpalamy timer, który po określonym czasie zrezygnuje z tokena
