@@ -118,7 +118,7 @@ class MainFrame(Frame):
         # Reset listy punktów
         self.drawer.changed_pxs = []
 
-    def clean(self, e):
+    def clean(self):
         """ Czyści obrazek oraz wysyła komunikat o wyczyszczeniu
         :param e: zdarzenie
         :return:
