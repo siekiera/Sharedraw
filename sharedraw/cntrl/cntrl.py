@@ -36,18 +36,19 @@ class Controller(Thread):
                 ImageMessage: self._handle_image_msg,
                 # Dołączenie klienta
                 JoinMessage: self._handle_join_msg,
-                QuitMessage: lambda m: self._remove_client(m.client_id),
+                QuitMessage: self._remove_remote_client,
                 CleanMessage: lambda m: self.sd_ui.clean(),
                 PassTokenMessage: self._handle_pass_token_message,
                 RequestTableMessage: self._handle_request_message,
                 ResignMessage: self._handle_resign_message,
-                InternalReloadMessage: lambda m: self._update_clients_info()
+                InternalReloadMessage: lambda m: self._update_clients_info(),
+                InternalQuitMessage: self._remove_neighbour_client
             }.get(type(sm.message))
 
             if action:
                 action(sm.message)
 
-            if type(sm.message) is not InternalReloadMessage:
+            if not isinstance(sm.message, InternalMessage):
                 # Przesłanie komunikatu do pozostałych klientów
                 self.peer_pool.send(sm.message, sm.client_id)
 
@@ -73,11 +74,16 @@ class Controller(Thread):
         self.clients.add(client_id, received_from_id)
         self._update_clients_info()
 
-    def _remove_client(self, client_id: str):
-        try:
-            self.clients.remove(client_id)
-        except ValueError:
-            logger.info("Value cannot be removed! %s" % client_id)
+    def _remove_remote_client(self, msg: QuitMessage):
+        self.clients.remove_remote(msg.client_ids, msg.detected_by)
+        self._update_clients_info()
+
+    def _remove_neighbour_client(self, msg: InternalQuitMessage):
+        # Usuwamy klienta i wszystkich z jego podsieci
+        removed_ids = self.clients.remove(msg.client_id)
+        # Generujemy Quit i wysyłamy do pozostałych
+        quit_msg = QuitMessage(removed_ids, own_id)
+        self.peer_pool.send(quit_msg)
         self._update_clients_info()
 
     def _handle_request_message(self, msg: RequestTableMessage):

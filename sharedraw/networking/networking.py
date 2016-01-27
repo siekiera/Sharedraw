@@ -48,7 +48,7 @@ class Peer(Thread):
         :return: nic
         """
         self.sock.send(data)
-        logger.info("Packet sent")
+        logger.info("Packet sent: %s" % data.decode("utf-8"))
 
     def receive(self):
         """ Odczytuje dane z gniazda
@@ -87,16 +87,17 @@ class Peer(Thread):
                     self.last_alive = datetime.now()
                     # Nieprzesyłany dalej
                     continue
-                elif type(rcm) is QuitMessage:
-                    if rcm.client_id == self.client_id:
-                        # Sam zdecydował się odejść - odłączamy
-                        self.enabled = False
-                        # W kontrolerze klient usunięty
+                # elif type(rcm) is QuitMessage:
+                #     if rcm.client_id == self.client_id:
+                #         # Sam zdecydował się odejść - odłączamy
+                #         self.enabled = False
+                #         W kontrolerze klient usunięty
                 # Ładujemy do kolejki - kontroler obsłuży
                 self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
                 # Wysłanie do pozostałych klientów w kontrolerze
-            except ConnectionError:
+            except OSError:
                 logger.warn("Connection error: %s" % str(sys.exc_info()))
+                self.enabled = False
                 break
         self.sock.close()
 
@@ -133,7 +134,7 @@ class PeerPool(Thread):
         """
         Główna pętla wątku, otwiera gniazdo serwera i przyjmuje połączenia
         """
-        logger.info("Tworzę gniazdo...: port: %s" % self.port)
+        logger.info("Creating socket...: port: %s" % self.port)
         sock = self.server_sock = socket(AF_INET, SOCK_STREAM)
         # Dzięki tej opcji gniazda nie powinny zostawać otwarte
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -210,6 +211,10 @@ class PeerPool(Thread):
         """ Sprawdza, czy klienci są żywi i wyłącza ich, jeśli nie
         """
         for peer in self.peers:
+            if not peer.enabled:
+                logger.warn("Peer %s has been disabled, removing" % peer.client_id)
+                self.__remove_peer(peer)
+                continue
             since_last_alive = datetime.now() - peer.last_alive
             if since_last_alive.total_seconds() > config.keep_alive_timeout:
                 logger.warn("Timeout exceeded: peer %s was last alive %s ago. DISCONNECTING" % (
@@ -223,14 +228,14 @@ class PeerPool(Thread):
         peer.enabled = False
         self.peers.remove(peer)
         # Wysyłamy do kontrolera info o usunięciu - zostanie rozpropagowane
-        self.queue_to_ui.put(SignedMessage(own_id, QuitMessage(str(peer.client_id))))
+        self.queue_to_ui.put(SignedMessage(own_id, InternalQuitMessage(str(peer.client_id))))
 
     def stop(self):
         """
         Zatrzymuje serwer i klientów
         """
         # Wysyłamy quit do wszystkich
-        self.send(QuitMessage(own_id))
+        # self.send(QuitMessage(own_id))
         # Zamykamy wszystko
         self.running = False
         if self.server_sock:
@@ -248,8 +253,9 @@ class KeepAliveSender(TimerThread):
         self.peer_pool = peer_pool
 
     def execute(self):
-        msg = KeepAliveMessage(own_id)
-        self.peer_pool.send(msg)
+        # TODO:: nie wysyłamy KeepAlive - należy za to włączyć tę opcję w gnieździe TCP
+        # msg = KeepAliveMessage(own_id)
+        # self.peer_pool.send(msg)
         # Sprawdzamy, czy klienty są aktywne - TODO:: może inne zadanie na to?
         self.peer_pool.check_alive()
 

@@ -6,6 +6,7 @@ from sharedraw.networking.messages import RequestTableMessage, PassTokenMessage,
     InternalReloadMessage, SignedMessage
 from sharedraw.networking.networking import PeerPool
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,23 +46,65 @@ class ClientsTable:
         self.clients = []
         # Domyślnie sami posiadamy; jeśli się do kogoś podłączymy - tracimy
         self.token_owner = own_id
-        self.locked = None
+        self.locked = False
 
     def add(self, client_id: str, received_from_id=None):
         if not self.__find_client(client_id):
             self.clients.append(Client(client_id, received_from_id))
 
     def remove(self, client_id: str):
+        """ Usuwa klienta oraz wszystkich klientów z jego podsieci
+        :param client_id: id klienta
+        :return: lista identyfikatorów usuniętych klientów
+        """
+        removed_ids = []
         c = self.__find_client(client_id)
         if not c:
             logger.error("Cannot remove client with id: %s - not present in list" % client_id)
+            return removed_ids
         # Usuwamy klienta
-        self.clients.remove(c)
+        self.__remove_client(c, own_id)
+        removed_ids.append(client_id)
         logger.debug("Removed client: %s" % client_id)
         # Usuwamy wszystkich otrzymanych od niego
         for child in filter(lambda ch: ch.received_from_id == client_id, self.clients):
-            self.clients.remove(child)
+            self.__remove_client(child, own_id)
+            removed_ids.append(child.id)
             logger.debug("Removed child %s received from %s" % (child.id, client_id))
+        return removed_ids
+
+    def remove_remote(self, client_ids: [], detected_by: str):
+        """ Usuwa klientów, do których nie byliśmy bezpośrednio połączeni
+        :param client_ids: identyfikatory klientów do usunięcia
+        :param detected_by: identyfikator klienta, który wykrył zmianę
+        :return: nic
+        """
+        for client_id in client_ids:
+            c = self.__find_client(client_id)
+            if not c:
+                logger.error("Cannot remove client with id: %s - not present in list" % client_id)
+
+            # Usuwamy klienta
+            self.__remove_client(c, detected_by)
+
+    def __remove_client(self, client, detected_by: str):
+        """ Usuwa klienta.
+        Jeśli klient był w posiadaniu tokena, zostaje on przejęty przez klienta detected_by
+        :param client: obiekt klasy Client
+        :param detected_by: klient, który wykrył zmianę i może przejąć token
+        :return: nic
+        """
+        # Usuwamy klienta
+        try:
+            self.clients.remove(client)
+        except ValueError:
+            logger.error("Cannot remove client: %s" % client.id)
+            return
+
+        # Jeśli miał token, zostaje przejęty przez tego, kto wykrył
+        if self.token_owner == client.id:
+            self.locked = False
+            self.token_owner = detected_by
 
     def get_client_ids(self):
         return list(map(lambda c: c.id, self.clients))

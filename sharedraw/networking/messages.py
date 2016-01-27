@@ -21,10 +21,11 @@ LOG_TIME = 'logicalTime'
 TOKEN = 'token'
 HAS_LOCK = 'hasLock'
 CLIENT_LIST = 'clientList'
+DETECTED_BY = 'detectedBy'
 
 PAINT_TYPE = 'paint'
 IMAGE_TYPE = 'image'
-JOIN_TYPE = 'join'
+JOIN_TYPE = 'joined'
 QUIT_TYPE = 'quit'
 KEEP_ALIVE_TYPE = 'keepAlive'
 CLEAN_TYPE = 'clean'
@@ -145,19 +146,19 @@ class QuitMessage(Message):
     """ Komunikat potwiedzający odłączenie się klienta
     """
 
-    def __init__(self, client_id: str):
-        self.client_id = client_id
+    def __init__(self, client_ids: [], detected_by: str):
+        self.client_ids = client_ids
+        self.detected_by = detected_by
 
     @staticmethod
     def from_json(msg: {}):
-        if not msg[CLIENT_ID]:
-            logger.error('No clientId!')
-        return QuitMessage(msg[CLIENT_ID])
+        return QuitMessage(msg[CLIENT_LIST], msg[DETECTED_BY])
 
     def to_json(self):
         msg = {
             TYPE: QUIT_TYPE,
-            CLIENT_ID: self.client_id
+            CLIENT_LIST: self.client_ids,
+            DETECTED_BY: self.detected_by
         }
         return json.dumps(msg)
 
@@ -323,5 +324,14 @@ class SignedMessage:
         self.message = message
 
 
-class InternalReloadMessage(Message):
+class InternalMessage(Message):
     pass
+
+
+class InternalReloadMessage(InternalMessage):
+    pass
+
+
+class InternalQuitMessage(InternalMessage):
+    def __init__(self, client_id: str):
+        self.client_id = client_id

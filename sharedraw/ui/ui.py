@@ -112,15 +112,14 @@ class MainFrame(Frame):
         :param e: zdarzenie
         :return:
         """
-        # TODO:: docelowo to trzeba robić automatycznie, a nie po naciśnięciu przycisku
-        msg = PaintMessage(self.drawer.changed_pxs, self.drawer.color)
-        self.ui.peer_pool.send(msg)
-        # Reset listy punktów
-        self.drawer.changed_pxs = []
+        if self.drawer.changed_pxs:
+            msg = PaintMessage(self.drawer.changed_pxs, self.drawer.color)
+            self.ui.peer_pool.send(msg)
+            # Reset listy punktów
+            self.drawer.changed_pxs = []
 
     def clean(self):
         """ Czyści obrazek oraz wysyła komunikat o wyczyszczeniu
-        :param e: zdarzenie
         :return:
         """
         self.drawer.clean_img()
@@ -257,6 +256,7 @@ class Drawer:
     def clean_img(self):
         """ Czyści obrazek
         """
+        # TODO:: należy też usunąć z self.img
         self.c.delete('all')
         self.changed_pxs = []
 
