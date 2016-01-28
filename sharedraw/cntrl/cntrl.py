@@ -31,10 +31,8 @@ class Controller(Thread):
         while not self.stop_event.is_set():
             sm = self.queue_to_ui.get()
             action = {
-                # Aktualizacja UI
                 PaintMessage: self.sd_ui.paint,
                 ImageMessage: self._handle_image_msg,
-                # Dołączenie klienta
                 JoinMessage: self._handle_join_msg,
                 QuitMessage: self._remove_remote_client,
                 CleanMessage: lambda m: self.sd_ui.clean(),

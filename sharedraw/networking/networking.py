@@ -245,7 +245,7 @@ class ClientStatusMonitor(TimerThread):
         self.peer_pool.check_alive()
 
 
-class MessageBuilder():
+class MessageBuilder:
     """ Klasa do budowania komunikatów - niektóre klienty wysyłają je w częściach, zatem trzeba poskładać do całości
     """
 

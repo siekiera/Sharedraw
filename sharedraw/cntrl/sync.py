@@ -6,7 +6,6 @@ from sharedraw.networking.messages import RequestTableMessage, PassTokenMessage,
     InternalReloadMessage, SignedMessage
 from sharedraw.networking.networking import PeerPool
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,16 +21,6 @@ class LogicalClock:
         :return: wynikowy czas
         """
         self.__time += 1
-        return self.__time
-
-    def join(self, other_time: int):
-        """ Operacja połączenia czasu logicznego tego zegara z innym
-        :param other_time: czas logiczny innego zegara
-        :return: wynikowy czas logiczny
-        """
-        if other_time > self.__time:
-            self.__time = other_time
-        self.increase()
         return self.__time
 
     def get(self):
@@ -107,6 +96,9 @@ class ClientsTable:
             self.token_owner = detected_by
 
     def get_client_ids(self):
+        """ Pobiera identyfikatory obecnie istniejących klientów
+        :return: lista łańcuchów znaków
+        """
         return list(map(lambda c: c.id, self.clients))
 
     def update_with_id_list(self, client_ids: [], received_from_id: str):
@@ -220,7 +212,7 @@ class OwnershipManager:
         return has_token
 
     def register_others_resign(self):
-        """ Rejestruje rezygnację innego klienta z locka
+        """ Rejestruje rezygnację innego klienta z blokowania tablicy
         :return: nic
         """
         self.__clients.locked = False
