@@ -1,12 +1,12 @@
-from datetime import datetime
 from queue import Queue
 from socket import *
 from threading import Event, Thread
 
+import select
+
 from sharedraw.config import config
 from sharedraw.concurrent.threading import TimerThread
 from sharedraw.networking.messages import *
-
 
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
@@ -26,7 +26,6 @@ class Peer(Thread):
         self.enabled = True
         self.is_incoming = False
         self.setDaemon(True)
-        self.last_alive = datetime.now()
         logger.debug("Peer created: %s, %s" % sock.getpeername())
 
     def is_active(self):
@@ -56,45 +55,40 @@ class Peer(Thread):
         builder = MessageBuilder()
         while self.enabled and not self.stop_event.is_set():
             try:
-                msg = self.sock.recv(65536)
-                if not msg:
-                    continue
-                full_msg = builder.append(msg).fetch()
-                if not full_msg:
-                    logger.debug("Raw received data: %s" % msg)
-                    continue
-                data = full_msg.decode("utf-8")
-                logger.info('Packet received: %s' % data)
-                rcm = from_json(data)
-                if not rcm:
-                    continue
-                if type(rcm) is JoinMessage:
-                    if not self.is_registered():
-                        # Nowy klient podłączył się do nas i wysłał join
-                        # Rejestrujemy klienta
+                # Dzięki wywołaniu select() sock.recv nie zwróci danych, jeśli połączenie zostało zamknięte
+                r, w, e = select.select((self.sock,), (), (), 0)
+                if r:
+                    msg = self.sock.recv(65536)
+                    if len(msg) == 0:
+                        logger.info('Data not available - assuming, that connection is closed')
+                        self.enabled = False
+                        break
+                    full_msg = builder.append(msg).fetch()
+                    if not full_msg:
+                        logger.debug("Raw received data: %s" % msg)
+                        continue
+                    data = full_msg.decode("utf-8")
+                    logger.info('Packet received: %s' % data)
+                    rcm = from_json(data)
+                    if not rcm:
+                        continue
+                    if type(rcm) is JoinMessage:
+                        if not self.is_registered():
+                            # Nowy klient podłączył się do nas i wysłał join
+                            # Rejestrujemy klienta
+                            self.client_id = rcm.client_id
+                            # Sam się zgłosił - w kontrolerze odsyłamy mu ImageMessage
+                            rcm.received_from_id = None
+                        else:
+                            rcm.received_from_id = self.client_id
+                    elif type(rcm) is ImageMessage:
+                        # Drugi klient potwiedził podłączenie i przesłał nam obrazek
+                        # Rejestrujemy
                         self.client_id = rcm.client_id
-                        # Sam się zgłosił - w kontrolerze odsyłamy mu ImageMessage
-                        rcm.received_from_id = None
-                    else:
-                        rcm.received_from_id = self.client_id
-                elif type(rcm) is ImageMessage:
-                    # Drugi klient potwiedził podłączenie i przesłał nam obrazek
-                    # Rejestrujemy
-                    self.client_id = rcm.client_id
-                    # Aktualizujemy obrazek w UI - w ramach kontrolera
-                elif type(rcm) is KeepAliveMessage:
-                    # KeepAlive - aktualizujemy datę
-                    self.last_alive = datetime.now()
-                    # Nieprzesyłany dalej
-                    continue
-                # elif type(rcm) is QuitMessage:
-                #     if rcm.client_id == self.client_id:
-                #         # Sam zdecydował się odejść - odłączamy
-                #         self.enabled = False
-                #         W kontrolerze klient usunięty
-                # Ładujemy do kolejki - kontroler obsłuży
-                self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
-                # Wysłanie do pozostałych klientów w kontrolerze
+                        # Aktualizujemy obrazek w UI - w ramach kontrolera
+                    # Ładujemy do kolejki - kontroler obsłuży
+                    self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+                    # Wysłanie do pozostałych klientów w kontrolerze
             except OSError:
                 logger.warn("Connection error: %s" % str(sys.exc_info()))
                 self.enabled = False
@@ -214,12 +208,6 @@ class PeerPool(Thread):
             if not peer.enabled:
                 logger.warn("Peer %s has been disabled, removing" % peer.client_id)
                 self.__remove_peer(peer)
-                continue
-            since_last_alive = datetime.now() - peer.last_alive
-            if since_last_alive.total_seconds() > config.keep_alive_timeout:
-                logger.warn("Timeout exceeded: peer %s was last alive %s ago. DISCONNECTING" % (
-                    peer.client_id, since_last_alive))
-                self.__remove_peer(peer)
 
     def __remove_peer(self, peer: Peer):
         """ Odłącza wybranego klienta
@@ -244,8 +232,8 @@ class PeerPool(Thread):
             peer.sock.close()
 
 
-class KeepAliveSender(TimerThread):
-    """ Wątek wysyłający co zadany interwał komunikat typu KeepAlive
+class ClientStatusMonitor(TimerThread):
+    """ Wątek sprawdzający dostępność klientów
     """
 
     def __init__(self, stopped, peer_pool: PeerPool):
@@ -253,10 +241,7 @@ class KeepAliveSender(TimerThread):
         self.peer_pool = peer_pool
 
     def execute(self):
-        # TODO:: nie wysyłamy KeepAlive - należy za to włączyć tę opcję w gnieździe TCP
-        # msg = KeepAliveMessage(own_id)
-        # self.peer_pool.send(msg)
-        # Sprawdzamy, czy klienty są aktywne - TODO:: może inne zadanie na to?
+        # Sprawdzamy, czy klienty są aktywne
         self.peer_pool.check_alive()
 
 

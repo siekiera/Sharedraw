@@ -11,7 +11,7 @@ def main():
     cntrl = Controller(stop_event, config.port)
     cntrl.start()
     cntrl.peer_pool.start()
-    cntrl.keep_alive_sender.start()
+    cntrl.status_monitor.start()
     cntrl.sd_ui.start()
     stop_event.set()
     cntrl.peer_pool.stop()

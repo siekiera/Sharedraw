@@ -163,27 +163,6 @@ class QuitMessage(Message):
         return json.dumps(msg)
 
 
-class KeepAliveMessage(Message):
-    """ Komunikat potwierdzający aktywność klienta
-    """
-
-    def __init__(self, client_id: str):
-        self.client_id = client_id
-
-    @staticmethod
-    def from_json(msg: {}):
-        if not msg[CLIENT_ID]:
-            logger.error('No clientId!')
-        return KeepAliveMessage(msg[CLIENT_ID])
-
-    def to_json(self):
-        msg = {
-            TYPE: KEEP_ALIVE_TYPE,
-            CLIENT_ID: self.client_id
-        }
-        return json.dumps(msg)
-
-
 class RequestTableMessage(Message):
     """ Żądanie przejęcia tablicy na własność
     """
@@ -287,7 +266,6 @@ message_type_handlers = {
     PAINT_TYPE: PaintMessage.from_json,
     JOIN_TYPE: JoinMessage.from_json,
     IMAGE_TYPE: ImageMessage.from_json,
-    KEEP_ALIVE_TYPE: KeepAliveMessage.from_json,
     QUIT_TYPE: QuitMessage.from_json,
     CLEAN_TYPE: CleanMessage.from_json,
     REQUEST_TYPE: RequestTableMessage.from_json,

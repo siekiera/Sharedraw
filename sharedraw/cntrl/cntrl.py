@@ -3,7 +3,7 @@ from threading import Thread, Event
 from sharedraw.cntrl.sync import ClientsTable, OwnershipManager
 
 from sharedraw.networking.messages import *
-from sharedraw.networking.networking import PeerPool, KeepAliveSender
+from sharedraw.networking.networking import PeerPool, ClientStatusMonitor
 from sharedraw.ui.ui import SharedrawUI
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class Controller(Thread):
         self.stop_event = stop_event
         self.queue_to_ui = Queue()
         self.peer_pool = PeerPool(port, stop_event, self.queue_to_ui)
-        self.keep_alive_sender = KeepAliveSender(stop_event, self.peer_pool)
+        self.status_monitor = ClientStatusMonitor(stop_event, self.peer_pool)
         # Lista klientów
         self.clients = ClientsTable()
         self.clients.add(own_id)
