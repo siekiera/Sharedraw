@@ -1,11 +1,11 @@
 import io
 from tkinter import *
-from tkinter.ttk import Treeview, Style
+from tkinter.ttk import Treeview
 
 from PIL import Image, ImageDraw, ImageTk
 
 from sharedraw.cntrl.sync import ClientsTable, OwnershipManager
-from sharedraw.config import own_id, config
+from sharedraw.config import config
 from sharedraw.networking.messages import *
 from sharedraw.networking.networking import PeerPool
 
@@ -89,7 +89,7 @@ class MainFrame(Frame):
                                          False)
         self.locked_label.pack()
         # Przycisk czyszczenia
-        self._create_button(text="Czyść", func=self.clean)
+        self.clean_btn = self._create_button(text="Czyść", func=self.clean)
         # Przycisk podłączenia
         self.connect_btn = self._create_button(text="Podłącz", func=self.connect)
         # Przycisk żądania przejęcia na własność
@@ -107,9 +107,8 @@ class MainFrame(Frame):
         btn.pack()
         return btn
 
-    def save(self, e=None):
+    def save(self):
         """ Wysyła komunikat o zmianie obrazka do innych klientów
-        :param e: zdarzenie
         :return:
         """
         if self.drawer.changed_pxs:
@@ -139,7 +138,6 @@ class MainFrame(Frame):
 
     def connect(self):
         """ Uruchamia okno dialogowe do podłączenia się z innym klientem
-        :param e: zdarzenie
         :return:
         """
         d = ConnectDialog(self.ui)
@@ -168,6 +166,8 @@ class MainFrame(Frame):
         self.__set_button_enabled(self.resign_btn, is_locker)
         # Możemy się podłączyć, tylko, jeśli nie jesteśmy do nikogo podłączeni
         self.__set_button_enabled(self.connect_btn, len(clients.clients) <= 1)
+        # Przycisk czyść aktywny jeśli możemy rysować
+        self.__set_button_enabled(self.clean_btn, has_token or not clients.locked)
 
     @staticmethod
     def __set_button_enabled(btn: Button, enabled: bool):
@@ -229,14 +229,14 @@ class Drawer:
         # Limit w celu zapewnienia płynności
         if len(self.changed_pxs) > config.line_max_length:
             # Wysyłamy
-            self.send(e)
+            self.send()
             # Linia zawiera tylko ostatni punkt
             self.changed_pxs.append((self.x, self.y))
 
     def __release(self, e):
         self.x = None
         self.y = None
-        self.send(e)
+        self.send()
 
     def draw(self, points: [], color: str):
         """ Rysuje łamaną przechodzącą przez punkty points
@@ -256,8 +256,9 @@ class Drawer:
     def clean_img(self):
         """ Czyści obrazek
         """
-        # TODO:: należy też usunąć z self.img
         self.c.delete('all')
+        self.img = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
+        self.img_draw = ImageDraw.Draw(self.img)
         self.changed_pxs = []
 
     def as_png(self):
