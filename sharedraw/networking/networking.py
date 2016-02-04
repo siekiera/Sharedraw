@@ -1,12 +1,13 @@
 from queue import Queue
 from socket import *
 from threading import Event, Thread
-
 import select
 
 from sharedraw.config import config
+
 from sharedraw.concurrent.threading import TimerThread
 from sharedraw.networking.messages import *
+
 
 __author__ = 'michalek'
 logger = logging.getLogger(__name__)
@@ -63,32 +64,39 @@ class Peer(Thread):
                         logger.info('Data not available - assuming, that connection is closed')
                         self.enabled = False
                         break
-                    full_msg = builder.append(msg).fetch()
-                    if not full_msg:
-                        logger.debug("Raw received data: %s" % msg)
+                    full_msgs = builder.append(msg).fetch()
+                    if not full_msgs:
+                        logger.debug("No ready messages; raw received data: %s" % msg)
                         continue
-                    data = full_msg.decode("utf-8")
-                    logger.info('Packet received: %s' % data)
-                    rcm = from_json(data)
-                    if not rcm:
-                        continue
-                    if type(rcm) is JoinMessage:
-                        if not self.is_registered():
-                            # Nowy klient podłączył się do nas i wysłał join
-                            # Rejestrujemy klienta
-                            self.client_id = rcm.client_id
-                            # Sam się zgłosił - w kontrolerze odsyłamy mu ImageMessage
-                            rcm.received_from_id = None
-                        else:
-                            rcm.received_from_id = self.client_id
-                    elif type(rcm) is ImageMessage:
-                        # Drugi klient potwiedził podłączenie i przesłał nam obrazek
-                        # Rejestrujemy
-                        self.client_id = rcm.client_id
-                        # Aktualizujemy obrazek w UI - w ramach kontrolera
-                    # Ładujemy do kolejki - kontroler obsłuży
-                    self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
-                    # Wysłanie do pozostałych klientów w kontrolerze
+                    logger.debug('Received %s message(s)' % len(full_msgs))
+                    for full_msg in full_msgs:
+                        data = full_msg.decode("utf-8")
+                        logger.info('Packet received: %s' % data)
+                        rcm = from_json(data)
+                        if not rcm:
+                            continue
+                        if type(rcm) is JoinMessage:
+                            if not self.is_registered():
+                                # Nowy klient podłączył się do nas i wysłał join
+                                # Rejestrujemy klienta
+                                self.client_id = rcm.client_id
+                                # Sam się zgłosił - w kontrolerze odsyłamy mu ImageMessage
+                                rcm.received_from_id = None
+                            else:
+                                rcm.received_from_id = self.client_id
+                        elif type(rcm) is ImageMessage:
+                            if not self.is_registered():
+                                # Drugi klient potwiedził podłączenie i przesłał nam obrazek
+                                # Rejestrujemy
+                                self.client_id = rcm.client_id
+                                # Aktualizujemy obrazek w UI - w ramach kontrolera
+                            else:
+                                logger.warn('Received ImageMessage from already registered client -'
+                                            ' this should not happen, ignoring')
+                                continue
+                        # Ładujemy do kolejki - kontroler obsłuży
+                        self.queue_to_ui.put(SignedMessage(self.client_id, rcm))
+                        # Wysłanie do pozostałych klientów w kontrolerze
             except OSError:
                 logger.warn("Connection error: %s" % str(sys.exc_info()))
                 self.enabled = False
@@ -246,11 +254,13 @@ class ClientStatusMonitor(TimerThread):
 
 
 class MessageBuilder:
-    """ Klasa do budowania komunikatów - niektóre klienty wysyłają je w częściach, zatem trzeba poskładać do całości
+    """ Klasa do budowania komunikatów - niektóre klienty wysyłają je w częściach, zatem trzeba poskładać do całości.
+    Obsługuje również sytuację, w której wiele komunikatów zostanie wysłanych w jednym pakiecie TCP
     """
 
     def __init__(self):
-        self.msg = bytes()
+        self.ready_msgs = []
+        self.msg = bytearray()
         self.left_par_count = 0
         self.right_par_count = 0
 
@@ -259,38 +269,37 @@ class MessageBuilder:
         :param rawdata: bajty (część komunikatu)
         :return: instancja buildera
         """
-        self.msg += rawdata
         self._parse_pars(rawdata)
         return self
 
     def fetch(self):
-        """ Pobiera komunikat
-        Jeśli komunikat jest błędny lub niedokończony zwraca None
-        :return: pełny komunikat w postaci bajtów lub None, jeśli się nie da
+        """ Pobiera zakończone komunikaty
+        :return: lista pełnych komunikatów w postaci bajtów lub pusta, jeśli nie ma
         """
-        if self.left_par_count == self.right_par_count:
-            # Komunikat zakończony - zwracamy
-            result = self.msg
-        elif self.left_par_count > self.right_par_count:
-            # Komunikat niedokończony - zwracamy None, zostanie dokończony potem
-            logger.debug("Received incomplete message... waiting for the rest")
-            return None
-        else:
-            # Komunikat błędny
-            logger.error("Invalid message - contains more right parenthesis than left. Dropping")
-            result = None
-        self._reset()
-        return result
+        msgs = self.ready_msgs
+        self.ready_msgs = []
+        return msgs
 
     def _parse_pars(self, rawdata: bytes):
+        """ Parsuje komunikat zliczając nawiasy, aby wiedzieć, kiedy przeczytano już cały komunikat
+        :param rawdata: dane otrzymane z pakietu TCP
+        :return: nic
+        """
         for byte in rawdata:
             char = chr(byte)
             if char == '{':
                 self.left_par_count += 1
             elif char == '}':
                 self.right_par_count += 1
+            if self.left_par_count <= 0:
+                continue
+            self.msg.append(byte)
+            if self.left_par_count == self.right_par_count:
+                logger.debug('Message reading finished: %s' % self.msg.decode("utf-8"))
+                self.ready_msgs.append(bytes(self.msg))
+                self._reset()
 
     def _reset(self):
-        self.msg = bytes()
+        self.msg = bytearray()
         self.left_par_count = 0
         self.right_par_count = 0

@@ -62,10 +62,10 @@ class Controller(Thread):
             # Przeproxowany klient - dodajemy do listy z informacją, kto wysłał
             self._add_client(msg.client_id, msg.received_from_id)
         else:
-            self._add_client(msg.client_id)
             # Odsyłamy ImageMessage, jeśli to klient, który podłączył się do nas
             img_msg = ImageMessage(own_id, self.sd_ui.get_png(), self.clients.get_client_ids(),
                                    self.clients.token_owner, self.clients.locked)
+            self._add_client(msg.client_id)
             self.peer_pool.send_to_client(img_msg, msg.client_id)
 
     def _add_client(self, client_id: str, received_from_id=None):

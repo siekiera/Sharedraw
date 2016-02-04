@@ -6,6 +6,7 @@ from collections import namedtuple
 
 from sharedraw.config import own_id
 
+
 logger = logging.getLogger(__name__)
 
 TYPE = 'type'
@@ -22,6 +23,10 @@ TOKEN = 'token'
 HAS_LOCK = 'hasLock'
 CLIENT_LIST = 'clientList'
 DETECTED_BY = 'detectedBy'
+X = 'x'
+Y = 'y'
+COLOR_WHITE = 255
+COLOR_BLACK = 0
 
 PAINT_TYPE = 'paint'
 IMAGE_TYPE = 'image'
@@ -66,17 +71,16 @@ class PaintMessage(Message):
     def from_json(msg: {}):
         if not msg[POINT_LIST]:
             logger.error('No coords!')
-        changed_pxs = list(map(lambda coord_obj: (coord_obj['x'], coord_obj['y']), msg[POINT_LIST]))
-        return PaintMessage(changed_pxs, 'white' if msg[COLOR] == '255' else 'black')
+        changed_pxs = list(map(lambda coord_obj: (coord_obj[X], coord_obj[Y]), msg[POINT_LIST]))
+        return PaintMessage(changed_pxs, 'white' if COLOR in msg and msg[COLOR] == COLOR_WHITE else 'black')
 
     def to_json(self):
-        data = list(map(lambda xy: {'x': xy[0], 'y': xy[1]}, self.changed_pxs))
+        data = list(map(lambda xy: {X: xy[0], Y: xy[1]}, self.changed_pxs))
         msg = {
             TYPE: PAINT_TYPE,
             CLIENT_ID: own_id,
             POINT_LIST: data,
-            # 'startLine': 'true',
-            COLOR: '255' if self.color == 'white' else '0'
+            COLOR: COLOR_WHITE if self.color == 'white' else COLOR_BLACK
         }
         return json.dumps(msg)
 
