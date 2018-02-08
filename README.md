@@ -9,3 +9,4 @@ This is the Python language version, compatible with corresponding programs writ
 C++ version: https://gitlab.com/jakubrak/remote-painter.
 
 Starting: `python sharedraw.py`
+Starting on other port: `python sharedraw.py -p 1234`
